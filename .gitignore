@@ -1,2 +1,4 @@
-!./certificates/.gitkeep
-!./credentials/.gitkeep
+certificates/*
+!certificates/.gitkeep
+credentials/*
+!credentials/.gitkeep
