@@ -2,3 +2,10 @@ certificates/*
 !certificates/.gitkeep
 credentials/*
 !credentials/.gitkeep
+.username
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
