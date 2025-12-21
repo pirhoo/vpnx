@@ -175,7 +175,12 @@ class ConnectHandler(CommandHandler):
         ]
         if self.service.needs_up_script(vpn_type):
             cmd.extend(
-                ["--script-security", "2", "--up", str(self.base_path / "scripts" / "up.sh")]
+                [
+                    "--script-security",
+                    "2",
+                    "--up",
+                    str(self.base_path / "scripts" / "up.sh"),
+                ]
             )
         cmd.extend(["--auth-user-pass", str(auth_file)])
 

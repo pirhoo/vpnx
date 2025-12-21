@@ -23,8 +23,14 @@ class Terminal:
 
     CSI = "\033["
     COLORS = {
-        "green": "32", "red": "31", "cyan": "36", "yellow": "33",
-        "gray": "90", "dim": "2", "bold": "1", "reset": "0",
+        "green": "32",
+        "red": "31",
+        "cyan": "36",
+        "yellow": "33",
+        "gray": "90",
+        "dim": "2",
+        "bold": "1",
+        "reset": "0",
     }
 
     def __init__(self):
