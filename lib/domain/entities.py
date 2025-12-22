@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from domain.value_objects import Status, VPNType
 
@@ -80,33 +80,43 @@ class VPNConnection:
 
 @dataclass
 class VPNState:
-    """UI state for displaying VPN connections."""
+    """UI state for displaying VPN connections.
 
-    ext_status: Status = Status.DISCONNECTED
-    int_status: Status = Status.DISCONNECTED
-    ext_log: str = ""
-    int_log: str = ""
+    Uses dictionaries internally to support N VPNs dynamically.
+    """
+
+    # Internal dict-based storage
+    _statuses: Dict[str, Status] = field(default_factory=dict)
+    _logs: Dict[str, str] = field(default_factory=dict)
+    _bandwidth: Dict[str, BandwidthStats] = field(default_factory=dict)
+
+    # Non-VPN-specific state
     spinner_frame: int = 0
     prompt: str = ""
-    ext_bandwidth: BandwidthStats = field(default_factory=BandwidthStats)
-    int_bandwidth: BandwidthStats = field(default_factory=BandwidthStats)
+
+    def initialize(self, vpn_names: List[str]) -> None:
+        """Initialize state for given VPN names."""
+        for name in vpn_names:
+            self._statuses[name] = Status.DISCONNECTED
+            self._logs[name] = ""
+            self._bandwidth[name] = BandwidthStats()
 
     def set_status(self, vpn_type: VPNType, status: Status) -> None:
-        if vpn_type.name == "EXT":
-            self.ext_status = status
-        else:
-            self.int_status = status
+        self._statuses[vpn_type.name] = status
+
+    def get_status(self, vpn_type: VPNType) -> Status:
+        return self._statuses.get(vpn_type.name, Status.DISCONNECTED)
 
     def set_log(self, vpn_type: VPNType, log_path: str) -> None:
-        if vpn_type.name == "EXT":
-            self.ext_log = log_path
-        else:
-            self.int_log = log_path
+        self._logs[vpn_type.name] = log_path
+
+    def get_log(self, vpn_type: VPNType) -> str:
+        return self._logs.get(vpn_type.name, "")
 
     def get_bandwidth(self, vpn_type: VPNType) -> BandwidthStats:
-        if vpn_type.name == "EXT":
-            return self.ext_bandwidth
-        return self.int_bandwidth
+        if vpn_type.name not in self._bandwidth:
+            self._bandwidth[vpn_type.name] = BandwidthStats()
+        return self._bandwidth[vpn_type.name]
 
     def advance_spinner(self) -> None:
         self.spinner_frame += 1
