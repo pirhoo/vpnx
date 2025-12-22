@@ -1,4 +1,4 @@
-.PHONY: help test lint format clean install run setup list ext int both
+.PHONY: help test lint format clean install setup list all
 
 PYTHON := python3
 SRC := $(shell find lib -name "*.py") run.py
@@ -12,11 +12,9 @@ help:
 	@echo "  make install  Install dependencies (none required)"
 	@echo ""
 	@echo "VPN Commands:"
-	@echo "  make setup    Configure credentials"
-	@echo "  make list     List available VPNs"
-	@echo "  make ext      Connect to EXT VPN"
-	@echo "  make int      Connect to INT VPN"
-	@echo "  make both     Connect to both VPNs"
+	@echo "  make setup    Configure VPN client"
+	@echo "  make list     List configured VPNs"
+	@echo "  make all      Connect to all configured VPNs"
 
 test:
 	@cd lib && $(PYTHON) -m unittest discover -s ../tests -v
@@ -45,20 +43,11 @@ install:
 	@echo "No Python dependencies required (stdlib only)"
 	@echo "System dependencies: openvpn pass gpg"
 
-run:
-	@$(PYTHON) run.py both
-
 setup:
 	@$(PYTHON) run.py setup
 
 list:
 	@$(PYTHON) run.py list
 
-ext:
-	@$(PYTHON) run.py ext
-
-int:
-	@$(PYTHON) run.py int
-
-both:
-	@$(PYTHON) run.py both
+all:
+	@$(PYTHON) run.py all
