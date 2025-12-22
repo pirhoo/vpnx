@@ -1,5 +1,6 @@
 """Command handlers - execute use cases."""
 
+import getpass
 import os
 import signal
 import time
@@ -433,7 +434,7 @@ class ConnectHandler(CommandHandler):
     def __init__(
         self,
         service: VPNService,
-        store: CredentialStore,
+        store: Optional[CredentialStore],
         username: str,
         tui: TUIRenderer,
         display: Display,
@@ -442,7 +443,8 @@ class ConnectHandler(CommandHandler):
     ):
         self.service = service
         self.store = store
-        self.username = username
+        self.username = username  # May be empty - will prompt
+        self.password: Optional[str] = None  # Will be fetched or prompted
         self.tui = tui
         self.display = display
         self.config_dir = config_dir
@@ -481,6 +483,16 @@ class ConnectHandler(CommandHandler):
     def _connect_vpn(self) -> bool:
         # Check/setup management interface
         self._setup_management()
+
+        # Prompt for username if not provided
+        if not self.username:
+            self.username = self._prompt_username()
+            if not self.username:
+                return False
+
+        # Get password from store or prompt
+        if not self._ensure_password():
+            return False
 
         while self.running:
             self.state.set_status(self.vpn_type, Status.WAITING)
@@ -542,7 +554,59 @@ class ConnectHandler(CommandHandler):
         self.state.prompt = ""
         return response != "n"
 
+    def _prompt_username(self) -> str:
+        """Prompt for username in TUI."""
+        self.state.prompt = "Username: "
+        self.tui.show_cursor()
+        self.tui.display(self.state, self.vpn_type.name)
+        self.tui.position_input(self.state.prompt, self.vpn_type.name)
+        old_handler = signal.signal(signal.SIGINT, signal.default_int_handler)
+        try:
+            username = input().strip()
+        except (KeyboardInterrupt, EOFError):
+            self.running = False
+            print(flush=True)
+            username = ""
+        finally:
+            signal.signal(signal.SIGINT, old_handler)
+        self.tui.hide_cursor()
+        self.state.prompt = ""
+        return username
+
+    def _prompt_password(self) -> str:
+        """Prompt for password in TUI (hidden input)."""
+        self.state.prompt = "Password: "
+        self.tui.show_cursor()
+        self.tui.display(self.state, self.vpn_type.name)
+        self.tui.position_input(self.state.prompt, self.vpn_type.name)
+        old_handler = signal.signal(signal.SIGINT, signal.default_int_handler)
+        try:
+            password = getpass.getpass("")
+        except (KeyboardInterrupt, EOFError):
+            self.running = False
+            print(flush=True)
+            password = ""
+        finally:
+            signal.signal(signal.SIGINT, old_handler)
+        self.tui.hide_cursor()
+        self.state.prompt = ""
+        return password
+
+    def _ensure_password(self) -> bool:
+        """Get password from store or prompt user."""
+        # Try to get from store first
+        if self.store:
+            password = self.store.get_password(self.username)
+            if password:
+                self.password = password
+                return True
+
+        # Prompt for password
+        self.password = self._prompt_password()
+        return bool(self.password)
+
     def _prompt_2fa(self) -> str:
+        """Prompt for 2FA code in TUI."""
         self.state.prompt = "2FA code: "
         self.tui.show_cursor()
         self.tui.display(self.state, self.vpn_type.name)
@@ -561,10 +625,10 @@ class ConnectHandler(CommandHandler):
         return code
 
     def _get_credentials(self, otp: str) -> Optional[Credentials]:
-        password = self.store.get_password(self.username)
-        if not password:
+        """Build credentials from stored username/password and OTP."""
+        if not self.username or not self.password:
             return None
-        return Credentials(self.username, password, otp)
+        return Credentials(self.username, self.password, otp)
 
     def _wait_for_connection(self) -> ConnectionResult:
         if self.management_port:
@@ -714,7 +778,7 @@ class ConnectAllHandler(CommandHandler):
     def __init__(
         self,
         service: VPNService,
-        store: CredentialStore,
+        store: Optional[CredentialStore],
         username: str,
         tui: TUIRenderer,
         display: Display,
@@ -724,7 +788,8 @@ class ConnectAllHandler(CommandHandler):
     ):
         self.service = service
         self.store = store
-        self.username = username
+        self.username = username  # May be empty - will prompt
+        self.password: Optional[str] = None  # Will be fetched or prompted
         self.tui = tui
         self.display = display
         self.config_paths = config_paths
@@ -749,6 +814,16 @@ class ConnectAllHandler(CommandHandler):
             # Set log paths for all VPNs
             for vpn_type in self.vpn_types:
                 self.state.set_log(vpn_type, str(self._log_path(vpn_type)))
+
+            # Prompt for username if not provided (once for all VPNs)
+            if not self.username:
+                self.username = self._prompt_username()
+                if not self.username:
+                    return False
+
+            # Get password from store or prompt (once for all VPNs)
+            if not self._ensure_password():
+                return False
 
             # Connect to each VPN in order
             for vpn_type in self.vpn_types:
@@ -839,7 +914,59 @@ class ConnectAllHandler(CommandHandler):
         self.state.prompt = ""
         return response != "n"
 
+    def _prompt_username(self) -> str:
+        """Prompt for username in TUI."""
+        self.state.prompt = "Username: "
+        self.tui.show_cursor()
+        self.tui.display(self.state, self.vpn_names)
+        self.tui.position_input(self.state.prompt, self.vpn_names)
+        old_handler = signal.signal(signal.SIGINT, signal.default_int_handler)
+        try:
+            username = input().strip()
+        except (KeyboardInterrupt, EOFError):
+            self.running = False
+            print(flush=True)
+            username = ""
+        finally:
+            signal.signal(signal.SIGINT, old_handler)
+        self.tui.hide_cursor()
+        self.state.prompt = ""
+        return username
+
+    def _prompt_password(self) -> str:
+        """Prompt for password in TUI (hidden input)."""
+        self.state.prompt = "Password: "
+        self.tui.show_cursor()
+        self.tui.display(self.state, self.vpn_names)
+        self.tui.position_input(self.state.prompt, self.vpn_names)
+        old_handler = signal.signal(signal.SIGINT, signal.default_int_handler)
+        try:
+            password = getpass.getpass("")
+        except (KeyboardInterrupt, EOFError):
+            self.running = False
+            print(flush=True)
+            password = ""
+        finally:
+            signal.signal(signal.SIGINT, old_handler)
+        self.tui.hide_cursor()
+        self.state.prompt = ""
+        return password
+
+    def _ensure_password(self) -> bool:
+        """Get password from store or prompt user."""
+        # Try to get from store first
+        if self.store:
+            password = self.store.get_password(self.username)
+            if password:
+                self.password = password
+                return True
+
+        # Prompt for password
+        self.password = self._prompt_password()
+        return bool(self.password)
+
     def _prompt_2fa(self, vpn_type: VPNType) -> str:
+        """Prompt for 2FA code in TUI."""
         self.state.prompt = f"{vpn_type.name} 2FA code: "
         self.tui.show_cursor()
         self.tui.display(self.state, self.vpn_names)
@@ -858,10 +985,10 @@ class ConnectAllHandler(CommandHandler):
         return code
 
     def _get_credentials(self, otp: str) -> Optional[Credentials]:
-        password = self.store.get_password(self.username)
-        if not password:
+        """Build credentials from stored username/password and OTP."""
+        if not self.username or not self.password:
             return None
-        return Credentials(self.username, password, otp)
+        return Credentials(self.username, self.password, otp)
 
     def _wait_for_connection(self, vpn_type: VPNType, log: Path) -> ConnectionResult:
         port = self.management_ports.get(vpn_type.name)
