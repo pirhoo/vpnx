@@ -6,11 +6,14 @@ import time
 import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional, Protocol
+from typing import Dict, Optional, Protocol
 
 from domain import VPNType, VPNState, Status, Credentials, ConnectionResult
 from domain.services import VPNService, CredentialStore
 from infrastructure.process import CommandRunner
+from infrastructure.config_parser import OpenVPNConfigParser
+from infrastructure.port_allocator import PortAllocator
+from infrastructure.management import ManagementClient, ManagementState
 from application.commands import (
     Command,
     SetupCommand,
@@ -197,6 +200,21 @@ class ConnectBothHandler(CommandHandler):
 
     UP_SCRIPT_VPNS = ["EXT"]
 
+    # Map management states to domain status
+    STATE_MAP = {
+        ManagementState.CONNECTING: Status.CONNECTING,
+        ManagementState.WAIT: Status.CONNECTING,
+        ManagementState.AUTH: Status.CONNECTING,
+        ManagementState.GET_CONFIG: Status.CONNECTING,
+        ManagementState.ASSIGN_IP: Status.CONNECTING,
+        ManagementState.ADD_ROUTES: Status.CONNECTING,
+        ManagementState.CONNECTED: Status.CONNECTED,
+        ManagementState.RECONNECTING: Status.CONNECTING,
+        ManagementState.EXITING: Status.DISCONNECTED,
+        ManagementState.RESOLVE: Status.CONNECTING,
+        ManagementState.TCP_CONNECT: Status.CONNECTING,
+    }
+
     def __init__(
         self,
         service: VPNService,
@@ -204,14 +222,18 @@ class ConnectBothHandler(CommandHandler):
         username: str,
         tui: TUIRenderer,
         display: Display,
+        config_dir: Path,
     ):
         self.service = service
         self.store = store
         self.username = username
         self.tui = tui
         self.display = display
+        self.config_dir = config_dir
         self.state = VPNState()
-        self.logs = {"EXT": None, "INT": None}
+        self.logs: Dict[str, Optional[Path]] = {"EXT": None, "INT": None}
+        self.management_ports: Dict[str, int] = {}
+        self.management_clients: Dict[str, ManagementClient] = {}
         self.running = True
         self.success = False
 
@@ -244,6 +266,13 @@ class ConnectBothHandler(CommandHandler):
 
     def _connect_vpn(self, vpn_type: VPNType) -> bool:
         log = self._log_path(vpn_type)
+
+        # Check/setup management interface on first attempt
+        if vpn_type.name not in self.management_ports:
+            self._setup_management(vpn_type)
+
+        management_port = self.management_ports.get(vpn_type.name)
+
         while self.running:
             self.state.set_status(vpn_type, Status.WAITING)
             code = self._prompt_2fa()
@@ -254,7 +283,7 @@ class ConnectBothHandler(CommandHandler):
             if not credentials:
                 return False
 
-            self.service.connect(vpn_type, credentials, log)
+            self.service.connect(vpn_type, credentials, log, management_port)
             result = self._wait_for_connection(vpn_type, log)
 
             if result == ConnectionResult.CONNECTED:
@@ -263,6 +292,40 @@ class ConnectBothHandler(CommandHandler):
 
             self._reset_vpn(vpn_type)
         return False
+
+    def _setup_management(self, vpn_type: VPNType) -> None:
+        """Check for management directive and prompt user if missing."""
+        config_path = self.config_dir / vpn_type.config_filename
+        parser = OpenVPNConfigParser(config_path)
+
+        if parser.has_management_directive():
+            config = parser.get_management_config()
+            self.management_ports[vpn_type.name] = config.port
+            return
+
+        if self._prompt_management_setup():
+            port = PortAllocator.allocate()
+            parser.append_management_directive("127.0.0.1", port)
+            self.management_ports[vpn_type.name] = port
+
+    def _prompt_management_setup(self) -> bool:
+        """Prompt user to enable management interface."""
+        self.state.prompt = "Management interface not found. Enable it? [Y/n]: "
+        self.tui.show_cursor()
+        self.tui.display(self.state)
+        self.tui.position_input(self.state.prompt)
+        old_handler = signal.signal(signal.SIGINT, signal.default_int_handler)
+        try:
+            response = input().strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            self.running = False
+            print(flush=True)
+            response = "n"
+        finally:
+            signal.signal(signal.SIGINT, old_handler)
+        self.tui.hide_cursor()
+        self.state.prompt = ""
+        return response != "n"
 
     def _prompt_2fa(self) -> str:
         self.state.prompt = "2FA code: "
@@ -289,12 +352,59 @@ class ConnectBothHandler(CommandHandler):
         return Credentials(self.username, password, otp)
 
     def _wait_for_connection(self, vpn_type: VPNType, log: Path) -> ConnectionResult:
+        port = self.management_ports.get(vpn_type.name)
+        if port:
+            return self._wait_via_management(vpn_type, port, log)
+        return self._wait_via_log(vpn_type, log)
+
+    def _wait_via_log(self, vpn_type: VPNType, log: Path) -> ConnectionResult:
+        """Wait for connection using log file polling."""
+
         def tick():
             self.state.set_status(vpn_type, Status.CONNECTING)
             self.state.advance_spinner()
             self.tui.display(self.state)
 
         return self.service.wait_for_connection(vpn_type, log, tick)
+
+    def _wait_via_management(
+        self, vpn_type: VPNType, port: int, log: Path
+    ) -> ConnectionResult:
+        """Wait for connection using management interface."""
+        client = ManagementClient(port=port)
+
+        # Try to connect to management interface
+        if not client.connect():
+            # Fall back to log-based polling
+            return self._wait_via_log(vpn_type, log)
+
+        self.management_clients[vpn_type.name] = client
+        client.send_command("state on")
+        client.send_command("bytecount 5")
+
+        timeout = 60
+        for _ in range(int(timeout / 0.1)):
+            self.state.set_status(vpn_type, Status.CONNECTING)
+            self.state.advance_spinner()
+            self.tui.display(self.state)
+
+            events = client.read_events()
+            for event in events:
+                status = self.STATE_MAP.get(event.state)
+                if status:
+                    self.state.set_status(vpn_type, status)
+                if event.state == ManagementState.CONNECTED:
+                    return ConnectionResult.CONNECTED
+                if event.state == ManagementState.EXITING:
+                    return ConnectionResult.PROCESS_DIED
+
+            if not self.service.is_connected(vpn_type):
+                time.sleep(0.5)
+                return ConnectionResult.PROCESS_DIED
+
+            time.sleep(0.1)
+
+        return ConnectionResult.TIMEOUT
 
     def _reset_vpn(self, vpn_type: VPNType) -> None:
         self.state.set_status(vpn_type, Status.DISCONNECTED)
@@ -343,6 +453,17 @@ class ConnectBothHandler(CommandHandler):
 
     def _cleanup(self) -> None:
         self.tui.cleanup()
+
+        # Disconnect management clients
+        for client in self.management_clients.values():
+            client.disconnect()
+        self.management_clients.clear()
+
+        # Release allocated ports
+        for port in self.management_ports.values():
+            PortAllocator.release(port)
+        self.management_ports.clear()
+
         for vpn_name in ["EXT", "INT"]:
             vpn = VPNType(vpn_name)
             self.service.disconnect(vpn)

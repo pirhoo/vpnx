@@ -127,7 +127,12 @@ class Application:
 
         if isinstance(command, ConnectBothCommand):
             handler = ConnectBothHandler(
-                self.vpn_service, self.store, username, self.tui, self.display
+                self.vpn_service,
+                self.store,
+                username,
+                self.tui,
+                self.display,
+                self.base_path / "certificates",
             )
             return 0 if handler.handle(command) else 1
 
