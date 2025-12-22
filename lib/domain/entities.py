@@ -23,8 +23,8 @@ class BandwidthStats:
     _interval_bytes_out: int = field(default=0, repr=False)
     _interval_duration: float = field(default=0.0, repr=False)
 
-    MAX_HISTORY = 20
-    HISTORY_INTERVAL = 60.0  # seconds per history point (1 minute)
+    MAX_HISTORY = 30
+    HISTORY_INTERVAL = 10.0  # seconds per history point
 
     def update(self, bytes_in: int, bytes_out: int, interval: float) -> None:
         """Update stats with new bytecount data."""
