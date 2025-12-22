@@ -39,7 +39,7 @@ class TUIRenderer(Protocol):
     def cleanup(self) -> None: ...
     def show_cursor(self) -> None: ...
     def hide_cursor(self) -> None: ...
-    def position_input(self, prompt: str) -> None: ...
+    def position_input(self, prompt: str, has_bandwidth: bool = False) -> None: ...
 
 
 class CommandHandler(ABC):
@@ -234,6 +234,7 @@ class ConnectBothHandler(CommandHandler):
         self.logs: Dict[str, Optional[Path]] = {"EXT": None, "INT": None}
         self.management_ports: Dict[str, int] = {}
         self.management_clients: Dict[str, ManagementClient] = {}
+        self.last_bytecount_time: Dict[str, float] = {}
         self.running = True
         self.success = False
 
@@ -308,12 +309,19 @@ class ConnectBothHandler(CommandHandler):
             parser.append_management_directive("127.0.0.1", port)
             self.management_ports[vpn_type.name] = port
 
+    def _has_bandwidth(self) -> bool:
+        """Check if we have bandwidth data to display."""
+        return (
+            self.state.ext_bandwidth.total_in > 0
+            or self.state.int_bandwidth.total_in > 0
+        )
+
     def _prompt_management_setup(self) -> bool:
         """Prompt user to enable management interface."""
         self.state.prompt = "Management interface not found. Enable it? [Y/n]: "
         self.tui.show_cursor()
         self.tui.display(self.state)
-        self.tui.position_input(self.state.prompt)
+        self.tui.position_input(self.state.prompt, self._has_bandwidth())
         old_handler = signal.signal(signal.SIGINT, signal.default_int_handler)
         try:
             response = input().strip().lower()
@@ -331,7 +339,7 @@ class ConnectBothHandler(CommandHandler):
         self.state.prompt = "2FA code: "
         self.tui.show_cursor()
         self.tui.display(self.state)
-        self.tui.position_input(self.state.prompt)
+        self.tui.position_input(self.state.prompt, self._has_bandwidth())
         old_handler = signal.signal(signal.SIGINT, signal.default_int_handler)
         try:
             code = input().strip()
@@ -379,6 +387,7 @@ class ConnectBothHandler(CommandHandler):
             return self._wait_via_log(vpn_type, log)
 
         self.management_clients[vpn_type.name] = client
+        self.last_bytecount_time[vpn_type.name] = time.time()
         client.send_command("state on")
         client.send_command("bytecount 5")
 
@@ -386,6 +395,7 @@ class ConnectBothHandler(CommandHandler):
         for _ in range(int(timeout / 0.1)):
             self.state.set_status(vpn_type, Status.CONNECTING)
             self.state.advance_spinner()
+            self._update_bandwidth(vpn_type, client)
             self.tui.display(self.state)
 
             events = client.read_events()
@@ -406,14 +416,41 @@ class ConnectBothHandler(CommandHandler):
 
         return ConnectionResult.TIMEOUT
 
+    def _update_bandwidth(self, vpn_type: VPNType, client: ManagementClient) -> None:
+        """Update bandwidth stats from management client."""
+        bytecount = client.get_bytecount()
+        if bytecount:
+            now = time.time()
+            last = self.last_bytecount_time.get(vpn_type.name, now)
+            interval = now - last
+            self.last_bytecount_time[vpn_type.name] = now
+
+            stats = self.state.get_bandwidth(vpn_type)
+            stats.update(bytecount.bytes_in, bytecount.bytes_out, interval)
+
     def _reset_vpn(self, vpn_type: VPNType) -> None:
         self.state.set_status(vpn_type, Status.DISCONNECTED)
         self.service.disconnect(vpn_type)
 
     def _monitor_loop(self, ext: VPNType, int_: VPNType) -> None:
+        check_interval = 20  # Check connection health every 20 iterations (2 sec)
+        iteration = 0
+
         while self.running:
+            # Update bandwidth from management clients
+            for vpn_name, client in self.management_clients.items():
+                vpn = VPNType(vpn_name)
+                client.read_events()  # Process any pending events
+                self._update_bandwidth(vpn, client)
+
             self.tui.display(self.state)
-            time.sleep(2)
+            time.sleep(0.1)
+            iteration += 1
+
+            # Only check connection health periodically
+            if iteration < check_interval:
+                continue
+            iteration = 0
 
             ext_log, int_log = self._log_path(ext), self._log_path(int_)
             ext_bad = not self.service.is_connected(ext) or self.service.has_errors(
