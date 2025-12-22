@@ -6,7 +6,7 @@ import time
 import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, Optional, Protocol
+from typing import Dict, List, Optional, Protocol
 
 from domain import VPNType, VPNState, Status, Credentials, ConnectionResult
 from domain.services import VPNService, CredentialStore
@@ -14,12 +14,14 @@ from infrastructure.process import CommandRunner
 from infrastructure.config_parser import OpenVPNConfigParser
 from infrastructure.port_allocator import PortAllocator
 from infrastructure.management import ManagementClient, ManagementState
+from infrastructure.xdg import XDGPaths
+from infrastructure.app_config import AppConfig, VPNConfig
 from application.commands import (
     Command,
     SetupCommand,
     ListCommand,
     ConnectCommand,
-    ConnectBothCommand,
+    ConnectAllCommand,
 )
 
 
@@ -34,12 +36,12 @@ class Display(Protocol):
 class TUIRenderer(Protocol):
     """Protocol for TUI rendering."""
 
-    def display(self, state: VPNState, vpn_name: str = None) -> None: ...
+    def display(self, state: VPNState, vpn_names: "str | List[str]") -> None: ...
     def setup(self) -> None: ...
     def cleanup(self) -> None: ...
     def show_cursor(self) -> None: ...
     def hide_cursor(self) -> None: ...
-    def position_input(self, prompt: str, vpn_name: str = None) -> None: ...
+    def position_input(self, prompt: str, vpn_names: "str | List[str]") -> None: ...
 
 
 class CommandHandler(ABC):
@@ -51,42 +53,321 @@ class CommandHandler(ABC):
 
 
 class SetupHandler(CommandHandler):
-    """Handle setup command."""
+    """Interactive setup wizard."""
 
     def __init__(
         self,
-        store: CredentialStore,
+        xdg: XDGPaths,
         runner: CommandRunner,
-        base_path: Path,
         display: Display,
+        store: Optional[CredentialStore] = None,
     ):
-        self.store = store
+        self.xdg = xdg
         self.runner = runner
-        self.base_path = base_path
         self.display = display
+        self.store = store
+        self.config: Optional[AppConfig] = None
+        self.modified = False
+        self.is_new_config = False
 
     def handle(self, command: SetupCommand) -> bool:
-        self.display.print("VPN Setup\n")
+        self.xdg.ensure_dirs()
+        self._load_or_create_config()
 
+        if self.is_new_config:
+            self._first_time_setup()
+        else:
+            self._main_menu()
+
+        return True
+
+    def _load_or_create_config(self) -> None:
+        """Load existing config or create empty one."""
+        if self.xdg.config_file.exists():
+            try:
+                self.config = AppConfig.load(self.xdg.config_file)
+                self.is_new_config = False
+            except Exception as e:
+                self.display.error(f"Error loading config: {e}")
+                self.config = AppConfig.empty(self.xdg)
+                self.is_new_config = True
+        else:
+            self.config = AppConfig.empty(self.xdg)
+            self.is_new_config = True
+
+    def _first_time_setup(self) -> None:
+        """Guide user through first-time setup."""
+        self.display.print("\nVPN Client Setup")
+        self.display.print("=" * 40)
+        self.display.print("\nNo existing configuration found.\n")
+
+        # Step 1: Add VPNs
+        self._add_vpn()
+        while True:
+            response = self.display.input("\nAdd another VPN? [Y/n]: ").strip().lower()
+            if response == "n":
+                break
+            self._add_vpn()
+
+        # Step 2: Username (after VPNs)
+        self.display.print("")
+        username = self.display.input(
+            "Username (leave empty to prompt each time): "
+        ).strip()
+        self.config.username = username
+
+        # Step 3: Credentials (if username provided)
+        if username:
+            response = (
+                self.display.input("\nConfigure password store? [Y/n]: ")
+                .strip()
+                .lower()
+            )
+            if response != "n":
+                self._configure_credentials()
+
+        # Save
+        self._save_config()
+        self.display.print("\nSetup complete!")
+
+    def _main_menu(self) -> None:
+        """Display main menu and handle choices."""
+        while True:
+            self._show_status()
+            self.display.print("\n[1] Add VPN")
+            self.display.print("[2] Edit VPN")
+            self.display.print("[3] Remove VPN")
+            self.display.print("[4] Change username")
+            self.display.print("[5] Configure credentials (GPG/password)")
+            self.display.print("[6] Save and exit")
+            self.display.print("[0] Exit without saving")
+
+            choice = self.display.input("\nChoice: ").strip()
+
+            if choice == "1":
+                self._add_vpn()
+            elif choice == "2":
+                self._edit_vpn()
+            elif choice == "3":
+                self._remove_vpn()
+            elif choice == "4":
+                self._change_username()
+            elif choice == "5":
+                self._configure_credentials()
+            elif choice == "6":
+                self._save_config()
+                self.display.print("\nConfiguration saved!")
+                break
+            elif choice == "0":
+                if self.modified:
+                    confirm = (
+                        self.display.input("Discard changes? [y/N]: ").strip().lower()
+                    )
+                    if confirm != "y":
+                        continue
+                self.display.print("\nExiting without saving.")
+                break
+
+    def _show_status(self) -> None:
+        """Show current configuration status."""
+        self.display.print("\n" + "=" * 40)
+        self.display.print("VPN Client Configuration")
+        self.display.print("=" * 40)
+
+        if self.config.vpns:
+            vpn_names = ", ".join(v.name for v in self.config.vpns)
+            self.display.print(
+                f"  VPNs configured: {len(self.config.vpns)} ({vpn_names})"
+            )
+        else:
+            self.display.print("  VPNs configured: none")
+
+        if self.config.username:
+            self.display.print(f"  Username: {self.config.username}")
+        else:
+            self.display.print("  Username: not set (will prompt)")
+
+        if self.config.is_credentials_configured():
+            self.display.print("  Credentials: configured")
+        else:
+            self.display.print("  Credentials: not set (will prompt)")
+
+    def _add_vpn(self) -> None:
+        """Interactive VPN addition wizard."""
+        self.display.print("\nAdd VPN")
+        self.display.print("-" * 20)
+
+        name = self.display.input("VPN name: ").strip().upper()
+        if not name:
+            self.display.error("VPN name is required")
+            return
+
+        default_display = name
+        display_name = (
+            self.display.input(f"Display name [{default_display}]: ").strip()
+            or default_display
+        )
+
+        config_path_str = self.display.input("Config file path: ").strip()
+        if not config_path_str:
+            self.display.error("Config file path is required")
+            return
+
+        config_path = Path(config_path_str).expanduser()
+        if not config_path.exists():
+            self.display.print(f"Warning: File not found: {config_path}")
+            confirm = self.display.input("Continue anyway? [y/N]: ").strip().lower()
+            if confirm != "y":
+                return
+
+        needs_up = self.display.input("Needs up script? [y/N]: ").strip().lower() == "y"
+
+        vpn = VPNConfig(
+            name=name,
+            display_name=display_name,
+            config_path=config_path,
+            needs_up_script=needs_up,
+        )
+        self.config.add_vpn(vpn)
+        self.modified = True
+        self.display.print(f"\nVPN '{name}' added.")
+
+    def _edit_vpn(self) -> None:
+        """Select and edit existing VPN."""
+        if not self.config.vpns:
+            self.display.print("\nNo VPNs configured.")
+            return
+
+        self.display.print("\nSelect VPN to edit:")
+        for i, vpn in enumerate(self.config.vpns, 1):
+            self.display.print(f"  [{i}] {vpn.name} - {vpn.display_name}")
+        self.display.print("  [0] Cancel")
+
+        choice = self.display.input("\nChoice: ").strip()
+        try:
+            idx = int(choice) - 1
+            if idx < 0 or idx >= len(self.config.vpns):
+                return
+        except ValueError:
+            return
+
+        old_vpn = self.config.vpns[idx]
+        self.display.print(f"\nEditing {old_vpn.name}")
+        self.display.print("-" * 20)
+
+        display_name = (
+            self.display.input(f"Display name [{old_vpn.display_name}]: ").strip()
+            or old_vpn.display_name
+        )
+
+        config_path_str = self.display.input(
+            f"Config file path [{old_vpn.config_path}]: "
+        ).strip() or str(old_vpn.config_path)
+        config_path = Path(config_path_str).expanduser()
+
+        needs_default = "Y" if old_vpn.needs_up_script else "N"
+        needs_up_str = (
+            self.display.input(f"Needs up script? [y/n] ({needs_default}): ")
+            .strip()
+            .lower()
+        )
+        if needs_up_str == "y":
+            needs_up = True
+        elif needs_up_str == "n":
+            needs_up = False
+        else:
+            needs_up = old_vpn.needs_up_script
+
+        new_vpn = VPNConfig(
+            name=old_vpn.name,
+            display_name=display_name,
+            config_path=config_path,
+            needs_up_script=needs_up,
+            up_script=old_vpn.up_script,
+        )
+        self.config.vpns[idx] = new_vpn
+        self.modified = True
+        self.display.print(f"\nVPN '{old_vpn.name}' updated.")
+
+    def _remove_vpn(self) -> None:
+        """Select and remove VPN."""
+        if not self.config.vpns:
+            self.display.print("\nNo VPNs configured.")
+            return
+
+        self.display.print("\nSelect VPN to remove:")
+        for i, vpn in enumerate(self.config.vpns, 1):
+            self.display.print(f"  [{i}] {vpn.name} - {vpn.display_name}")
+        self.display.print("  [0] Cancel")
+
+        choice = self.display.input("\nChoice: ").strip()
+        try:
+            idx = int(choice) - 1
+            if idx < 0 or idx >= len(self.config.vpns):
+                return
+        except ValueError:
+            return
+
+        vpn = self.config.vpns[idx]
+        confirm = self.display.input(f"Remove '{vpn.name}'? [y/N]: ").strip().lower()
+        if confirm == "y":
+            self.config.remove_vpn(vpn.name)
+            self.modified = True
+            self.display.print(f"\nVPN '{vpn.name}' removed.")
+
+    def _change_username(self) -> None:
+        """Prompt for new username."""
+        current = self.config.username or "(not set)"
+        self.display.print(f"\nCurrent username: {current}")
+        username = self.display.input(
+            "New username (leave empty to prompt each time): "
+        ).strip()
+        self.config.username = username
+        self.modified = True
+        if username:
+            self.display.print(f"\nUsername set to: {username}")
+        else:
+            self.display.print("\nUsername cleared (will prompt at connection).")
+
+    def _configure_credentials(self) -> None:
+        """GPG and password setup."""
         if not self._check_gpg():
-            return False
+            return
 
         gpg_id = self.display.input("\nGPG key ID: ").strip()
-        username = self.display.input("ICIJ username: ").strip()
+        if not gpg_id:
+            self.display.error("GPG key ID is required")
+            return
 
-        if not gpg_id or not username:
-            self.display.error("Error: Both GPG ID and username required")
-            return False
+        if not self.store:
+            # Import here to avoid circular dependency
+            from infrastructure.password_store import PassPasswordStore
 
-        self._save_username(username)
-        return self._init_store(gpg_id, username)
+            self.store = PassPasswordStore(self.config.credentials_dir)
+
+        self.display.print("\nInitializing password store...")
+        if not self.store.initialize(gpg_id):
+            self.display.error("Error: Failed to init password store")
+            return
+
+        if self.config.username:
+            self.display.print("\nEnter password:")
+            if not self.store.store_password(self.config.username):
+                self.display.error("Error: Failed to store password")
+                return
+            self.display.print("\nCredentials configured!")
+        else:
+            self.display.print(
+                "\nPassword store initialized. Set username to store password."
+            )
 
     def _check_gpg(self) -> bool:
+        """Check if GPG keys are available."""
         result = self.runner.run(["gpg", "--list-secret-keys"])
         if "sec" not in result.stdout:
             self.display.error("Error: No GPG keys. Run: gpg --gen-key")
             return False
-        self.display.print("GPG keys:")
+        self.display.print("\nGPG keys:")
         result = self.runner.run(
             ["gpg", "--list-secret-keys", "--keyid-format", "SHORT"]
         )
@@ -95,20 +376,10 @@ class SetupHandler(CommandHandler):
                 self.display.print(line)
         return True
 
-    def _save_username(self, username: str) -> None:
-        (self.base_path / ".username").write_text(username)
-
-    def _init_store(self, gpg_id: str, username: str) -> bool:
-        self.display.print("\nInitializing password store...")
-        if not self.store.initialize(gpg_id):
-            self.display.error("Error: Failed to init password store")
-            return False
-        self.display.print("\nEnter ICIJ password:")
-        if not self.store.store_password(username):
-            self.display.error("Error: Failed to store password")
-            return False
-        self.display.print("\nSetup complete!")
-        return True
+    def _save_config(self) -> None:
+        """Save config to XDG config file."""
+        self.config.save(self.xdg.config_file)
+        self.modified = False
 
 
 class ListHandler(CommandHandler):
@@ -400,10 +671,8 @@ class ConnectHandler(CommandHandler):
             self.service.cleanup(self.log_path)
 
 
-class ConnectBothHandler(CommandHandler):
-    """Handle dual VPN connection with TUI."""
-
-    UP_SCRIPT_VPNS = ["EXT"]
+class ConnectAllHandler(CommandHandler):
+    """Handle multi-VPN connection with TUI for N VPNs."""
 
     # Map management states to domain status
     STATE_MAP = {
@@ -427,39 +696,43 @@ class ConnectBothHandler(CommandHandler):
         username: str,
         tui: TUIRenderer,
         display: Display,
-        config_dir: Path,
+        config_paths: Dict[str, Path],
+        vpn_types: List[VPNType],
     ):
         self.service = service
         self.store = store
         self.username = username
         self.tui = tui
         self.display = display
-        self.config_dir = config_dir
+        self.config_paths = config_paths
+        self.vpn_types = vpn_types
+        self.vpn_names = [v.name for v in vpn_types]
         self.state = VPNState()
-        self.logs: Dict[str, Optional[Path]] = {"EXT": None, "INT": None}
+        self.state.initialize(self.vpn_names)
+        self.logs: Dict[str, Optional[Path]] = {name: None for name in self.vpn_names}
         self.management_ports: Dict[str, int] = {}
         self.management_clients: Dict[str, ManagementClient] = {}
         self.last_bytecount_time: Dict[str, float] = {}
         self.running = True
         self.success = False
 
-    def handle(self, command: ConnectBothCommand) -> bool:
+    def handle(self, command: ConnectAllCommand) -> bool:
         self._setup_signals()
         self._start_sudo_refresh()
         self.tui.setup()
 
         try:
-            ext = VPNType("EXT")
-            int_ = VPNType("INT")
+            # Set log paths for all VPNs
+            for vpn_type in self.vpn_types:
+                self.state.set_log(vpn_type, str(self._log_path(vpn_type)))
 
-            self.state.ext_log = str(self._log_path(ext))
-            self.state.int_log = str(self._log_path(int_))
-
-            if not self._connect_vpn(ext) or not self._connect_vpn(int_):
-                return False
+            # Connect to each VPN in order
+            for vpn_type in self.vpn_types:
+                if not self._connect_vpn(vpn_type):
+                    return False
 
             self.success = True
-            self._monitor_loop(ext, int_)
+            self._monitor_loop()
             return True
         finally:
             self._cleanup()
@@ -481,7 +754,7 @@ class ConnectBothHandler(CommandHandler):
 
         while self.running:
             self.state.set_status(vpn_type, Status.WAITING)
-            code = self._prompt_2fa()
+            code = self._prompt_2fa(vpn_type)
             if not code:
                 return False
 
@@ -501,7 +774,9 @@ class ConnectBothHandler(CommandHandler):
 
     def _setup_management(self, vpn_type: VPNType) -> None:
         """Check for management directive and prompt user if missing."""
-        config_path = self.config_dir / vpn_type.config_filename
+        config_path = self.config_paths.get(vpn_type.name)
+        if not config_path:
+            return
         parser = OpenVPNConfigParser(config_path)
 
         if parser.has_management_directive():
@@ -518,8 +793,8 @@ class ConnectBothHandler(CommandHandler):
         """Prompt user to enable management interface."""
         self.state.prompt = "Management interface not found. Enable it? [Y/n]: "
         self.tui.show_cursor()
-        self.tui.display(self.state)
-        self.tui.position_input(self.state.prompt)
+        self.tui.display(self.state, self.vpn_names)
+        self.tui.position_input(self.state.prompt, self.vpn_names)
         old_handler = signal.signal(signal.SIGINT, signal.default_int_handler)
         try:
             response = input().strip().lower()
@@ -533,11 +808,11 @@ class ConnectBothHandler(CommandHandler):
         self.state.prompt = ""
         return response != "n"
 
-    def _prompt_2fa(self) -> str:
-        self.state.prompt = "2FA code: "
+    def _prompt_2fa(self, vpn_type: VPNType) -> str:
+        self.state.prompt = f"{vpn_type.name} 2FA code: "
         self.tui.show_cursor()
-        self.tui.display(self.state)
-        self.tui.position_input(self.state.prompt)
+        self.tui.display(self.state, self.vpn_names)
+        self.tui.position_input(self.state.prompt, self.vpn_names)
         old_handler = signal.signal(signal.SIGINT, signal.default_int_handler)
         try:
             code = input().strip()
@@ -569,7 +844,7 @@ class ConnectBothHandler(CommandHandler):
         def tick():
             self.state.set_status(vpn_type, Status.CONNECTING)
             self.state.advance_spinner()
-            self.tui.display(self.state)
+            self.tui.display(self.state, self.vpn_names)
 
         return self.service.wait_for_connection(vpn_type, log, tick)
 
@@ -594,7 +869,7 @@ class ConnectBothHandler(CommandHandler):
             self.state.set_status(vpn_type, Status.CONNECTING)
             self.state.advance_spinner()
             self._update_bandwidth(vpn_type, client)
-            self.tui.display(self.state)
+            self.tui.display(self.state, self.vpn_names)
 
             events = client.read_events()
             for event in events:
@@ -634,7 +909,7 @@ class ConnectBothHandler(CommandHandler):
         self.state.set_status(vpn_type, Status.DISCONNECTED)
         self.service.disconnect(vpn_type)
 
-    def _monitor_loop(self, ext: VPNType, int_: VPNType) -> None:
+    def _monitor_loop(self) -> None:
         check_interval = 20  # Check connection health every 20 iterations (2 sec)
         iteration = 0
 
@@ -645,7 +920,7 @@ class ConnectBothHandler(CommandHandler):
                 client.read_events()  # Process any pending events
                 self._update_bandwidth(vpn, client)
 
-            self.tui.display(self.state)
+            self.tui.display(self.state, self.vpn_names)
             time.sleep(0.1)
             iteration += 1
 
@@ -654,24 +929,22 @@ class ConnectBothHandler(CommandHandler):
                 continue
             iteration = 0
 
-            ext_log, int_log = self._log_path(ext), self._log_path(int_)
-            ext_bad = not self.service.is_connected(ext) or self.service.has_errors(
-                ext_log
-            )
-            int_bad = not self.service.is_connected(int_) or self.service.has_errors(
-                int_log
-            )
+            # Check each VPN for errors - reconnect from failed one onwards
+            for i, vpn_type in enumerate(self.vpn_types):
+                log = self._log_path(vpn_type)
+                is_bad = not self.service.is_connected(
+                    vpn_type
+                ) or self.service.has_errors(log)
 
-            if ext_bad:
-                self._reset_vpn(ext)
-                self._reset_vpn(int_)
-                if not self._connect_vpn(ext) or not self._connect_vpn(int_):
-                    self.success = False
-                    break
-            elif int_bad:
-                self._reset_vpn(int_)
-                if not self._connect_vpn(int_):
-                    self.success = False
+                if is_bad:
+                    # Reset this VPN and all following ones
+                    for v in self.vpn_types[i:]:
+                        self._reset_vpn(v)
+                    # Reconnect from this VPN onwards
+                    for v in self.vpn_types[i:]:
+                        if not self._connect_vpn(v):
+                            self.success = False
+                            return
                     break
 
     def _setup_signals(self) -> None:
@@ -703,10 +976,10 @@ class ConnectBothHandler(CommandHandler):
             PortAllocator.release(port)
         self.management_ports.clear()
 
-        for vpn_name in ["EXT", "INT"]:
-            vpn = VPNType(vpn_name)
-            self.service.disconnect(vpn)
+        # Disconnect and cleanup all VPNs
+        for vpn_type in self.vpn_types:
+            self.service.disconnect(vpn_type)
             if self.success:
-                log = self.logs.get(vpn_name)
+                log = self.logs.get(vpn_type.name)
                 if log:
                     self.service.cleanup(log)
