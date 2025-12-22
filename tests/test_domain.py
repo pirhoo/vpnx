@@ -229,27 +229,27 @@ class TestBandwidthStats(unittest.TestCase):
     def test_history_accumulates_after_interval(self):
         stats = BandwidthStats()
         stats.update(1000, 500, 1.0)
-        # Accumulate for 60 seconds (HISTORY_INTERVAL)
-        stats.update(2000, 1000, 60.0)
+        # Accumulate for 10 seconds (HISTORY_INTERVAL)
+        stats.update(2000, 1000, 10.0)
         self.assertEqual(len(stats.history_in), 1)
         self.assertEqual(len(stats.history_out), 1)
-        # Average rate over 60 seconds: 1000 bytes / 60 sec
-        self.assertAlmostEqual(stats.history_in[0], 1000 / 60, places=2)
+        # Average rate over 10 seconds: 1000 bytes / 10 sec
+        self.assertAlmostEqual(stats.history_in[0], 1000 / 10, places=2)
 
     def test_history_not_added_before_interval(self):
         stats = BandwidthStats()
         stats.update(1000, 500, 1.0)
-        # Only 30 seconds elapsed (less than HISTORY_INTERVAL)
-        stats.update(2000, 1000, 30.0)
+        # Only 5 seconds elapsed (less than HISTORY_INTERVAL of 10s)
+        stats.update(2000, 1000, 5.0)
         self.assertEqual(len(stats.history_in), 0)
         self.assertEqual(len(stats.history_out), 0)
 
     def test_history_max_length(self):
         stats = BandwidthStats()
         stats.update(100, 50, 1.0)
-        # Add MAX_HISTORY + 5 intervals (each >= HISTORY_INTERVAL)
+        # Add MAX_HISTORY + 5 intervals (each >= HISTORY_INTERVAL of 10s)
         for i in range(stats.MAX_HISTORY + 5):
-            stats.update(100 * (i + 2), 50 * (i + 2), 60.0)
+            stats.update(100 * (i + 2), 50 * (i + 2), 10.0)
         self.assertEqual(len(stats.history_in), stats.MAX_HISTORY)
         self.assertEqual(len(stats.history_out), stats.MAX_HISTORY)
 
@@ -265,8 +265,8 @@ class TestBandwidthStats(unittest.TestCase):
     def test_accumulator_resets_after_history_add(self):
         stats = BandwidthStats()
         stats.update(1000, 500, 1.0)
-        stats.update(2000, 1000, 60.0)  # First history point
-        stats.update(3000, 1500, 60.0)  # Second history point
+        stats.update(2000, 1000, 10.0)  # First history point
+        stats.update(3000, 1500, 10.0)  # Second history point
         self.assertEqual(len(stats.history_in), 2)
 
     def test_rate_preserved_when_bytes_unchanged(self):
@@ -281,10 +281,10 @@ class TestBandwidthStats(unittest.TestCase):
     def test_no_update_when_bytes_unchanged(self):
         stats = BandwidthStats()
         stats.update(1000, 500, 1.0)
-        stats.update(2000, 1000, 60.0)
+        stats.update(2000, 1000, 10.0)
         self.assertEqual(len(stats.history_in), 1)
         # Same bytes - should not add to history
-        stats.update(2000, 1000, 60.0)
+        stats.update(2000, 1000, 10.0)
         self.assertEqual(len(stats.history_in), 1)  # Still 1
 
 
