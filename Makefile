@@ -18,7 +18,7 @@ help:
 	@echo "  make lint           Check code style"
 	@echo "  make format         Auto-format code"
 	@echo "  make clean          Remove cache files"
-	@echo "  make install        Show system dependencies"
+	@echo "  make install        Check system dependencies"
 
 test:
 	@cd lib && $(PYTHON) -m unittest discover -s ../tests -v
@@ -44,8 +44,26 @@ clean:
 	@echo "Cleaned"
 
 install:
-	@echo "No Python dependencies required (stdlib only)"
-	@echo "System dependencies: openvpn gpg"
+	@echo "Checking system dependencies..."
+	@ok=true; \
+	for cmd in openvpn gpg; do \
+		if command -v $$cmd >/dev/null 2>&1; then \
+			echo "  ✓ $$cmd"; \
+		else \
+			echo "  ✗ $$cmd (not found)"; \
+			ok=false; \
+		fi; \
+	done; \
+	echo ""; \
+	if $$ok; then \
+		echo "All dependencies installed"; \
+	else \
+		echo "Missing dependencies. Install with:"; \
+		echo "  Debian/Ubuntu: sudo apt install openvpn gnupg"; \
+		echo "  Fedora: sudo dnf install openvpn gnupg2"; \
+		echo "  Arch: sudo pacman -S openvpn gnupg"; \
+		exit 1; \
+	fi
 
 setup:
 	@$(PYTHON) run.py setup
