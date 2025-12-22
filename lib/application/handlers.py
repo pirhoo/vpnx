@@ -269,10 +269,15 @@ class ConnectBothHandler(CommandHandler):
         self.tui.show_cursor()
         self.tui.display(self.state)
         self.tui.position_input(self.state.prompt)
+        old_handler = signal.signal(signal.SIGINT, signal.default_int_handler)
         try:
             code = input().strip()
         except (KeyboardInterrupt, EOFError):
+            self.running = False
+            print(flush=True)
             code = ""
+        finally:
+            signal.signal(signal.SIGINT, old_handler)
         self.tui.hide_cursor()
         self.state.prompt = ""
         return code
