@@ -86,27 +86,32 @@ class Sparkline:
 class BandwidthLine:
     """Bandwidth display with sparkline and stats."""
 
-    SPARKLINE_WIDTH = 10
+    # Fixed content: "LBL ● ↓nnnnnnnn/s ↑nnnnnnnn/s  (nnnnnn)"
+    # Visible chars: 3 + 2 + 12 + 1 + 12 + 2 + ~10 = ~42 without sparkline
+    FIXED_WIDTH = 42
 
     def __init__(self, term: Terminal):
         self.term = term
         self.sparkline = Sparkline(term)
 
-    def _get_sparkline(self, stats: BandwidthStats) -> str:
+    def _get_sparkline(self, stats: BandwidthStats, width: int) -> str:
         """Generate sparkline from bandwidth history."""
+        if width <= 0:
+            return ""
         combined = []
         for i in range(max(len(stats.history_in), len(stats.history_out))):
             h_in = stats.history_in[i] if i < len(stats.history_in) else 0
             h_out = stats.history_out[i] if i < len(stats.history_out) else 0
             combined.append(h_in + h_out)
-        return self.sparkline.render(combined, self.SPARKLINE_WIDTH)
+        return self.sparkline.render(combined, width)
 
-    def format(self, stats: BandwidthStats, label: str) -> str:
+    def format(self, stats: BandwidthStats, label: str, width: int = 50) -> str:
         """Format bandwidth line: LABEL ↓rate ↑rate [sparkline] (total)."""
         down = format_rate(stats.rate_in)
         up = format_rate(stats.rate_out)
         total = format_bytes(stats.total_in + stats.total_out)
-        spark = self._get_sparkline(stats)
+        spark_width = max(5, width - self.FIXED_WIDTH)
+        spark = self._get_sparkline(stats, spark_width)
 
         lbl = f"{self.term.color('bold')}{label}{self.term.reset()}"
         down_c = f"{self.term.color('green')}↓{down:>10}{self.term.reset()}"
@@ -116,7 +121,8 @@ class BandwidthLine:
         return f"{lbl} {down_c} {up_c} {spark} {total_c}"
 
     def format_with_status(
-        self, stats: BandwidthStats, label: str, status: Status, frame: int = 0
+        self, stats: BandwidthStats, label: str, status: Status, frame: int = 0,
+        width: int = 50
     ) -> str:
         """Format bandwidth with status icon: LABEL ● ↓rate ↑rate [sparkline] (total)."""
         icon, _, color_name = STATUS_CONFIG[status]
@@ -126,7 +132,8 @@ class BandwidthLine:
         down = format_rate(stats.rate_in)
         up = format_rate(stats.rate_out)
         total = format_bytes(stats.total_in + stats.total_out)
-        spark = self._get_sparkline(stats)
+        spark_width = max(5, width - self.FIXED_WIDTH)
+        spark = self._get_sparkline(stats, spark_width)
 
         lbl = f"{self.term.color('bold')}{label}{self.term.reset()}"
         icon_c = f"{self.term.color(color_name)}{icon}{self.term.reset()}"
@@ -319,12 +326,18 @@ class TUI:
         lines.append(self.box.top_split("Status", w, split))
 
         # Show status in two cells (EXT left, INT right)
+        # Cell content width: split - 3 for left cell, w - split - 4 for right
+        left_width = split - 3
+        right_width = w - split - 4
+
         if self._has_bandwidth(state):
             ext_cell = self.bandwidth.format_with_status(
-                state.ext_bandwidth, "EXT", state.ext_status, state.spinner_frame
+                state.ext_bandwidth, "EXT", state.ext_status, state.spinner_frame,
+                left_width
             )
             int_cell = self.bandwidth.format_with_status(
-                state.int_bandwidth, "INT", state.int_status, state.spinner_frame
+                state.int_bandwidth, "INT", state.int_status, state.spinner_frame,
+                right_width
             )
         else:
             ext_cell = self.status.format("EXT", state.ext_status, state.spinner_frame)
