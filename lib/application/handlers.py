@@ -413,13 +413,14 @@ class ConnectBothHandler(CommandHandler):
         """Update bandwidth stats from management client."""
         bytecount = client.get_bytecount()
         if bytecount:
-            now = time.time()
-            last = self.last_bytecount_time.get(vpn_type.name, now)
-            interval = now - last
-            self.last_bytecount_time[vpn_type.name] = now
-
             stats = self.state.get_bandwidth(vpn_type)
-            stats.update(bytecount.bytes_in, bytecount.bytes_out, interval)
+            # Only update timestamp when bytes actually change
+            if bytecount.bytes_in != stats.total_in or bytecount.bytes_out != stats.total_out:
+                now = time.time()
+                last = self.last_bytecount_time.get(vpn_type.name, now)
+                interval = now - last
+                self.last_bytecount_time[vpn_type.name] = now
+                stats.update(bytecount.bytes_in, bytecount.bytes_out, interval)
 
     def _reset_vpn(self, vpn_type: VPNType) -> None:
         self.state.set_status(vpn_type, Status.DISCONNECTED)
