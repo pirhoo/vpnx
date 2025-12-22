@@ -415,7 +415,10 @@ class ConnectBothHandler(CommandHandler):
         if bytecount:
             stats = self.state.get_bandwidth(vpn_type)
             # Only update timestamp when bytes actually change
-            if bytecount.bytes_in != stats.total_in or bytecount.bytes_out != stats.total_out:
+            if (
+                bytecount.bytes_in != stats.total_in
+                or bytecount.bytes_out != stats.total_out
+            ):
                 now = time.time()
                 last = self.last_bytecount_time.get(vpn_type.name, now)
                 interval = now - last

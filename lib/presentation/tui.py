@@ -8,8 +8,16 @@ from presentation.terminal import Terminal, visible_len
 
 
 BOX = {
-    "tl": "╭", "tr": "╮", "bl": "╰", "br": "╯", "h": "─", "v": "│",
-    "ml": "├", "mr": "┤", "mt": "┬", "mb": "┴",
+    "tl": "╭",
+    "tr": "╮",
+    "bl": "╰",
+    "br": "╯",
+    "h": "─",
+    "v": "│",
+    "ml": "├",
+    "mr": "┤",
+    "mt": "┬",
+    "mb": "┴",
 }
 SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 SPARKLINE_CHARS = "▁▂▃▄▅▆▇█"
@@ -121,8 +129,12 @@ class BandwidthLine:
         return f"{lbl} {down_c} {up_c} {spark} {total_c}"
 
     def format_with_status(
-        self, stats: BandwidthStats, label: str, status: Status, frame: int = 0,
-        width: int = 50
+        self,
+        stats: BandwidthStats,
+        label: str,
+        status: Status,
+        frame: int = 0,
+        width: int = 50,
     ) -> str:
         """Format bandwidth with status icon: LABEL ● ↓rate ↑rate [sparkline] (total)."""
         icon, _, color_name = STATUS_CONFIG[status]
@@ -190,7 +202,9 @@ class Box:
         inner = width - 2
         left_w = split_pos - 1
         right_w = inner - split_pos
-        return self._c(f"{BOX['ml']}{self.hline(left_w)}{BOX['mb']}{self.hline(right_w)}{BOX['mr']}")
+        return self._c(
+            f"{BOX['ml']}{self.hline(left_w)}{BOX['mb']}{self.hline(right_w)}{BOX['mr']}"
+        )
 
     def _truncate_ansi(self, content: str, max_len: int) -> str:
         """Truncate string preserving ANSI codes."""
@@ -332,12 +346,18 @@ class TUI:
 
         if self._has_bandwidth(state):
             ext_cell = self.bandwidth.format_with_status(
-                state.ext_bandwidth, "EXT", state.ext_status, state.spinner_frame,
-                left_width
+                state.ext_bandwidth,
+                "EXT",
+                state.ext_status,
+                state.spinner_frame,
+                left_width,
             )
             int_cell = self.bandwidth.format_with_status(
-                state.int_bandwidth, "INT", state.int_status, state.spinner_frame,
-                right_width
+                state.int_bandwidth,
+                "INT",
+                state.int_status,
+                state.spinner_frame,
+                right_width,
             )
         else:
             ext_cell = self.status.format("EXT", state.ext_status, state.spinner_frame)
