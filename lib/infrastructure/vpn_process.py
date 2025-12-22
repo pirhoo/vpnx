@@ -29,12 +29,18 @@ class OpenVPNProcessManager(ProcessManager):
         return self.config_dir / vpn_type.config_filename
 
     def _build_command(
-        self, vpn_type: VPNType, auth_file: Path, use_up_script: bool
+        self,
+        vpn_type: VPNType,
+        auth_file: Path,
+        use_up_script: bool,
+        management_port: Optional[int] = None,
     ) -> List[str]:
         """Build OpenVPN command."""
         cmd = ["sudo", "openvpn", "--config", str(self._config_path(vpn_type))]
         if use_up_script and self.up_script:
             cmd.extend(["--script-security", "2", "--up", str(self.up_script)])
+        if management_port:
+            cmd.extend(["--management", "127.0.0.1", str(management_port)])
         cmd.extend(["--auth-user-pass", str(auth_file)])
         return cmd
 
@@ -44,11 +50,12 @@ class OpenVPNProcessManager(ProcessManager):
         credentials: Credentials,
         log_path: Path,
         use_up_script: bool,
+        management_port: Optional[int] = None,
     ) -> None:
         """Start VPN connection in background."""
         auth_file = log_path.with_suffix(".auth")
         auth_file.write_text(credentials.auth_string)
-        cmd = self._build_command(vpn_type, auth_file, use_up_script)
+        cmd = self._build_command(vpn_type, auth_file, use_up_script, management_port)
         self.runner.start_background(cmd, str(log_path))
 
     def stop(self, vpn_type: VPNType) -> None:
