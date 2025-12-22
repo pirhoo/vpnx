@@ -18,24 +18,44 @@ class BandwidthStats:
     history_in: List[float] = field(default_factory=list)
     history_out: List[float] = field(default_factory=list)
 
+    # Accumulator for history interval
+    _interval_bytes_in: int = field(default=0, repr=False)
+    _interval_bytes_out: int = field(default=0, repr=False)
+    _interval_duration: float = field(default=0.0, repr=False)
+
     MAX_HISTORY = 20
+    HISTORY_INTERVAL = 60.0  # seconds per history point (1 minute)
 
     def update(self, bytes_in: int, bytes_out: int, interval: float) -> None:
         """Update stats with new bytecount data."""
-        if interval > 0:
-            # Calculate rate from delta
+        if interval > 0 and self.total_in > 0:
+            # Calculate instantaneous rate from delta
             delta_in = bytes_in - self.total_in
             delta_out = bytes_out - self.total_out
-            if self.total_in > 0:  # Not first update
-                self.rate_in = delta_in / interval
-                self.rate_out = delta_out / interval
-                self.history_in.append(self.rate_in)
-                self.history_out.append(self.rate_out)
-                # Keep history bounded
+            self.rate_in = delta_in / interval
+            self.rate_out = delta_out / interval
+
+            # Accumulate for history
+            self._interval_bytes_in += delta_in
+            self._interval_bytes_out += delta_out
+            self._interval_duration += interval
+
+            # Add to history when interval completes
+            if self._interval_duration >= self.HISTORY_INTERVAL:
+                avg_in = self._interval_bytes_in / self._interval_duration
+                avg_out = self._interval_bytes_out / self._interval_duration
+                self.history_in.append(avg_in)
+                self.history_out.append(avg_out)
+
                 if len(self.history_in) > self.MAX_HISTORY:
                     self.history_in.pop(0)
                 if len(self.history_out) > self.MAX_HISTORY:
                     self.history_out.pop(0)
+
+                # Reset accumulator
+                self._interval_bytes_in = 0
+                self._interval_bytes_out = 0
+                self._interval_duration = 0.0
 
         self.total_in = bytes_in
         self.total_out = bytes_out

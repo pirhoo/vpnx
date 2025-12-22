@@ -226,23 +226,30 @@ class TestBandwidthStats(unittest.TestCase):
         self.assertEqual(stats.rate_in, 500.0)  # (2000-1000)/2.0
         self.assertEqual(stats.rate_out, 250.0)  # (1000-500)/2.0
 
-    def test_history_accumulates(self):
+    def test_history_accumulates_after_interval(self):
         stats = BandwidthStats()
         stats.update(1000, 500, 1.0)
-        stats.update(2000, 1000, 1.0)
-        stats.update(4000, 2000, 1.0)
-        self.assertEqual(len(stats.history_in), 2)
-        self.assertEqual(len(stats.history_out), 2)
-        self.assertEqual(stats.history_in, [1000.0, 2000.0])
-        self.assertEqual(stats.history_out, [500.0, 1000.0])
+        # Accumulate for 60 seconds (HISTORY_INTERVAL)
+        stats.update(2000, 1000, 60.0)
+        self.assertEqual(len(stats.history_in), 1)
+        self.assertEqual(len(stats.history_out), 1)
+        # Average rate over 60 seconds: 1000 bytes / 60 sec
+        self.assertAlmostEqual(stats.history_in[0], 1000 / 60, places=2)
+
+    def test_history_not_added_before_interval(self):
+        stats = BandwidthStats()
+        stats.update(1000, 500, 1.0)
+        # Only 30 seconds elapsed (less than HISTORY_INTERVAL)
+        stats.update(2000, 1000, 30.0)
+        self.assertEqual(len(stats.history_in), 0)
+        self.assertEqual(len(stats.history_out), 0)
 
     def test_history_max_length(self):
         stats = BandwidthStats()
-        # First update (doesn't add to history)
         stats.update(100, 50, 1.0)
-        # Add MAX_HISTORY + 5 more updates
+        # Add MAX_HISTORY + 5 intervals (each >= HISTORY_INTERVAL)
         for i in range(stats.MAX_HISTORY + 5):
-            stats.update(100 * (i + 2), 50 * (i + 2), 1.0)
+            stats.update(100 * (i + 2), 50 * (i + 2), 60.0)
         self.assertEqual(len(stats.history_in), stats.MAX_HISTORY)
         self.assertEqual(len(stats.history_out), stats.MAX_HISTORY)
 
@@ -254,6 +261,13 @@ class TestBandwidthStats(unittest.TestCase):
         self.assertEqual(stats.rate_in, 0.0)
         # But totals are updated
         self.assertEqual(stats.total_in, 2000)
+
+    def test_accumulator_resets_after_history_add(self):
+        stats = BandwidthStats()
+        stats.update(1000, 500, 1.0)
+        stats.update(2000, 1000, 60.0)  # First history point
+        stats.update(3000, 1500, 60.0)  # Second history point
+        self.assertEqual(len(stats.history_in), 2)
 
 
 if __name__ == "__main__":
