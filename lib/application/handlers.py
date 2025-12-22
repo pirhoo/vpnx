@@ -32,6 +32,7 @@ class TUIRenderer(Protocol):
     """Protocol for TUI rendering."""
 
     def display(self, state: VPNState) -> None: ...
+    def setup(self) -> None: ...
     def cleanup(self) -> None: ...
     def show_cursor(self) -> None: ...
     def hide_cursor(self) -> None: ...
@@ -217,7 +218,7 @@ class ConnectBothHandler(CommandHandler):
     def handle(self, command: ConnectBothCommand) -> bool:
         self._setup_signals()
         self._start_sudo_refresh()
-        self.tui.hide_cursor()
+        self.tui.setup()
 
         try:
             ext = VPNType("EXT")
@@ -336,9 +337,7 @@ class ConnectBothHandler(CommandHandler):
         threading.Thread(target=refresh, daemon=True).start()
 
     def _cleanup(self) -> None:
-        self.tui.show_cursor()
-        if self.success:
-            self.tui.cleanup()
+        self.tui.cleanup()
         for vpn_name in ["EXT", "INT"]:
             vpn = VPNType(vpn_name)
             self.service.disconnect(vpn)
