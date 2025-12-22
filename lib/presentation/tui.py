@@ -174,13 +174,16 @@ class TUI:
         self.term.move_to(3, 3 + len(prompt))
         self.term.flush()
 
+    def setup(self) -> None:
+        self.term.enter_alt_screen()
+        self.term.hide_cursor()
+
+    def cleanup(self) -> None:
+        self.term.show_cursor()
+        self.term.leave_alt_screen()
+
     def hide_cursor(self) -> None:
         self.term.hide_cursor()
 
     def show_cursor(self) -> None:
         self.term.show_cursor()
-
-    def cleanup(self) -> None:
-        self.term.show_cursor()
-        self.term.clear()
-        self.term.flush()
