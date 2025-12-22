@@ -1,7 +1,7 @@
 """OpenVPN process management."""
 
 from pathlib import Path
-from typing import Optional, List
+from typing import Dict, Optional, List
 
 from domain.services import ProcessManager
 from domain.value_objects import VPNType, Credentials, ConnectionResult
@@ -16,17 +16,36 @@ ERROR_PATTERNS = [
 
 
 class OpenVPNProcessManager(ProcessManager):
-    """Manages OpenVPN processes."""
+    """Manages OpenVPN processes.
+
+    Supports two modes:
+    1. Config-based: Explicit path mapping from VPN names to config files
+    2. Directory-based (legacy): Use config_dir with VPNType.config_filename
+    """
 
     def __init__(
-        self, runner: CommandRunner, config_dir: Path, up_script: Optional[Path] = None
+        self,
+        runner: CommandRunner,
+        config_dir: Optional[Path] = None,
+        up_script: Optional[Path] = None,
+        config_paths: Optional[Dict[str, Path]] = None,
     ):
         self.runner = runner
         self.config_dir = config_dir
         self.up_script = up_script
+        self.config_paths = config_paths or {}
 
     def _config_path(self, vpn_type: VPNType) -> Path:
-        return self.config_dir / vpn_type.config_filename
+        # New mode: use explicit config paths
+        name_upper = vpn_type.name.upper()
+        if name_upper in self.config_paths:
+            return self.config_paths[name_upper]
+
+        # Legacy mode: construct from directory
+        if self.config_dir:
+            return self.config_dir / vpn_type.config_filename
+
+        raise ValueError(f"No config path for VPN: {vpn_type.name}")
 
     def _build_command(
         self,

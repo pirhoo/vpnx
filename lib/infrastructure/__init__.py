@@ -13,6 +13,8 @@ from infrastructure.management import (
     ManagementEvent,
     Bytecount,
 )
+from infrastructure.app_config import AppConfig, VPNConfig
+from infrastructure.xdg import XDGPaths
 
 __all__ = [
     "CommandRunner",
@@ -27,4 +29,7 @@ __all__ = [
     "ManagementState",
     "ManagementEvent",
     "Bytecount",
+    "AppConfig",
+    "VPNConfig",
+    "XDGPaths",
 ]
