@@ -221,12 +221,14 @@ class SetupHandler(CommandHandler):
                 return
 
         needs_up = self.display.input("Needs up script? [y/N]: ").strip().lower() == "y"
+        needs_2fa = self.display.input("Needs 2FA? [Y/n]: ").strip().lower() != "n"
 
         vpn = VPNConfig(
             name=name,
             display_name=display_name,
             config_path=config_path,
             needs_up_script=needs_up,
+            needs_2fa=needs_2fa,
         )
         self.config.add_vpn(vpn)
         self.modified = True
@@ -278,11 +280,25 @@ class SetupHandler(CommandHandler):
         else:
             needs_up = old_vpn.needs_up_script
 
+        needs_2fa_default = "Y" if old_vpn.needs_2fa else "N"
+        needs_2fa_str = (
+            self.display.input(f"Needs 2FA? [y/n] ({needs_2fa_default}): ")
+            .strip()
+            .lower()
+        )
+        if needs_2fa_str == "y":
+            needs_2fa = True
+        elif needs_2fa_str == "n":
+            needs_2fa = False
+        else:
+            needs_2fa = old_vpn.needs_2fa
+
         new_vpn = VPNConfig(
             name=old_vpn.name,
             display_name=display_name,
             config_path=config_path,
             needs_up_script=needs_up,
+            needs_2fa=needs_2fa,
             up_script=old_vpn.up_script,
         )
         self.config.vpns[idx] = new_vpn
@@ -422,6 +438,7 @@ class ConnectHandler(CommandHandler):
         tui: TUIRenderer,
         display: Display,
         config_dir: Path,
+        needs_2fa: bool = True,
     ):
         self.service = service
         self.store = store
@@ -429,6 +446,7 @@ class ConnectHandler(CommandHandler):
         self.tui = tui
         self.display = display
         self.config_dir = config_dir
+        self.needs_2fa = needs_2fa
         self.state = VPNState()
         self.log_path: Optional[Path] = None
         self.management_port: Optional[int] = None
@@ -466,9 +484,13 @@ class ConnectHandler(CommandHandler):
 
         while self.running:
             self.state.set_status(self.vpn_type, Status.WAITING)
-            code = self._prompt_2fa()
-            if not code:
-                return False
+
+            if self.needs_2fa:
+                code = self._prompt_2fa()
+                if not code:
+                    return False
+            else:
+                code = ""  # No 2FA needed
 
             credentials = self._get_credentials(code)
             if not credentials:
@@ -698,6 +720,7 @@ class ConnectAllHandler(CommandHandler):
         display: Display,
         config_paths: Dict[str, Path],
         vpn_types: List[VPNType],
+        needs_2fa: Optional[Dict[str, bool]] = None,
     ):
         self.service = service
         self.store = store
@@ -707,6 +730,7 @@ class ConnectAllHandler(CommandHandler):
         self.config_paths = config_paths
         self.vpn_types = vpn_types
         self.vpn_names = [v.name for v in vpn_types]
+        self.needs_2fa = needs_2fa or {}  # Default to empty dict (all need 2FA)
         self.state = VPNState()
         self.state.initialize(self.vpn_names)
         self.logs: Dict[str, Optional[Path]] = {name: None for name in self.vpn_names}
@@ -752,11 +776,18 @@ class ConnectAllHandler(CommandHandler):
 
         management_port = self.management_ports.get(vpn_type.name)
 
+        # Check if this VPN needs 2FA (default to True if not specified)
+        vpn_needs_2fa = self.needs_2fa.get(vpn_type.name, True)
+
         while self.running:
             self.state.set_status(vpn_type, Status.WAITING)
-            code = self._prompt_2fa(vpn_type)
-            if not code:
-                return False
+
+            if vpn_needs_2fa:
+                code = self._prompt_2fa(vpn_type)
+                if not code:
+                    return False
+            else:
+                code = ""  # No 2FA needed
 
             credentials = self._get_credentials(code)
             if not credentials:
