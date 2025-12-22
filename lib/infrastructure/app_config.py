@@ -23,6 +23,7 @@ class VPNConfig:
     display_name: str
     config_path: Path
     needs_up_script: bool = False
+    needs_2fa: bool = True  # Most VPNs need 2FA
     up_script: Optional[Path] = None  # Per-VPN override
 
     def to_dict(self) -> dict:
@@ -32,6 +33,7 @@ class VPNConfig:
             "display": self.display_name,
             "config_path": str(self.config_path),
             "needs_up_script": self.needs_up_script,
+            "needs_2fa": self.needs_2fa,
         }
         if self.up_script:
             data["up_script"] = str(self.up_script)
@@ -45,6 +47,7 @@ class VPNConfig:
             display_name=data.get("display", data["name"]),
             config_path=Path(data["config_path"]).expanduser(),
             needs_up_script=data.get("needs_up_script", False),
+            needs_2fa=data.get("needs_2fa", True),
             up_script=Path(data["up_script"]).expanduser()
             if data.get("up_script")
             else None,
