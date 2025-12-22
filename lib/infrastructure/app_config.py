@@ -59,7 +59,7 @@ class AppConfig:
     """Application configuration."""
 
     username: str
-    credentials_dir: Path
+    credentials_path: Path  # Base path for credentials (adds .gpg and .gpg-id)
     up_script: Optional[Path]
     vpns: List[VPNConfig] = field(default_factory=list)
 
@@ -92,7 +92,7 @@ class AppConfig:
         """Convert to dictionary for YAML serialization."""
         data = {
             "username": self.username,
-            "credentials_dir": str(self.credentials_dir),
+            "credentials_path": str(self.credentials_path),
             "vpns": [v.to_dict() for v in self.vpns],
         }
         if self.up_script:
@@ -133,9 +133,23 @@ class AppConfig:
         """Create from dictionary."""
         vpns = [VPNConfig.from_dict(v) for v in data.get("vpns", [])]
 
+        # Support both old credentials_dir and new credentials_path
+        creds_path = data.get("credentials_path") or data.get("credentials_dir", "")
+
+        # Use XDG default if path is empty or current directory
+        if not creds_path or creds_path == ".":
+            import os
+
+            data_home = Path(
+                os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")
+            )
+            creds_path = data_home / "vpnx" / "credentials"
+        else:
+            creds_path = Path(creds_path).expanduser()
+
         return cls(
             username=data.get("username", ""),
-            credentials_dir=Path(data.get("credentials_dir", "")).expanduser(),
+            credentials_path=creds_path,
             up_script=Path(data["up_script"]).expanduser()
             if data.get("up_script")
             else None,
@@ -147,12 +161,12 @@ class AppConfig:
         """Create empty config with XDG defaults pre-filled."""
         return cls(
             username="",
-            credentials_dir=xdg.credentials_dir,
+            credentials_path=xdg.credentials_path,
             up_script=None,
             vpns=[],
         )
 
     def is_credentials_configured(self) -> bool:
-        """Check if credentials/password store is configured."""
-        gpg_id_file = self.credentials_dir / ".gpg-id"
+        """Check if credentials are configured (GPG key ID file exists)."""
+        gpg_id_file = Path(str(self.credentials_path) + ".gpg-id")
         return gpg_id_file.exists()

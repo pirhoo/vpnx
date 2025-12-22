@@ -6,7 +6,7 @@ A terminal UI for managing OpenVPN connections with 2FA support.
 
 - Interactive setup wizard for configuring multiple VPNs
 - Full-screen TUI with real-time connection status and bandwidth monitoring
-- Secure credential storage using `pass` (GPG-encrypted)
+- Secure credential storage using GPG encryption
 - Support for up scripts (DNS/routing configuration)
 - XDG Base Directory compliant configuration
 
@@ -14,8 +14,7 @@ A terminal UI for managing OpenVPN connections with 2FA support.
 
 - Python 3.8+
 - openvpn
-- pass (password manager)
-- gpg
+- gpg (for encrypted password storage)
 
 ## Installation
 
@@ -66,7 +65,8 @@ Configuration is stored in XDG-compliant directories:
 └── up.sh              # Optional default up script
 
 ~/.local/share/vpnx/
-└── credentials/       # GPG-encrypted password store
+├── credentials.gpg    # GPG-encrypted password
+└── credentials.gpg-id # GPG key ID
 
 ~/.cache/vpnx/
 └── logs/              # Connection logs
@@ -76,7 +76,7 @@ Configuration is stored in XDG-compliant directories:
 
 ```yaml
 username: your-username
-credentials_dir: ~/.local/share/vpnx/credentials
+credentials_path: ~/.local/share/vpnx/credentials
 up_script: /path/to/up.sh  # Optional global up script
 
 vpns:

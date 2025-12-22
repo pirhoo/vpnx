@@ -35,7 +35,7 @@ from application.handlers import (
 class Application:
     """Main application - wires dependencies and routes commands."""
 
-    REQUIRED_COMMANDS = ["openvpn", "pass", "gpg"]
+    REQUIRED_COMMANDS = ["openvpn", "gpg"]
 
     def __init__(self):
         self.runner = CommandRunner()
@@ -87,7 +87,7 @@ class Application:
         )
 
         # Password store (might not be initialized)
-        self.store = PassPasswordStore(self.config.credentials_dir)
+        self.store = PassPasswordStore(self.config.credentials_path)
 
         # Domain service
         self.vpn_service = VPNService(

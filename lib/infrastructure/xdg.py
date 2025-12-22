@@ -36,8 +36,8 @@ class XDGPaths:
         return self.config_home / "config.yaml"
 
     @property
-    def credentials_dir(self) -> Path:
-        """Path to the password store directory."""
+    def credentials_path(self) -> Path:
+        """Path to the encrypted credentials file."""
         return self.data_home / "credentials"
 
     @property

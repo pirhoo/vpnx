@@ -67,7 +67,7 @@ class TestAppConfig(unittest.TestCase):
     def test_create_config(self):
         config = AppConfig(
             username="john",
-            credentials_dir=Path("/tmp/creds"),
+            credentials_path=Path("/tmp/creds"),
             up_script=None,
             vpns=[
                 VPNConfig(
@@ -78,13 +78,13 @@ class TestAppConfig(unittest.TestCase):
             ],
         )
         self.assertEqual(config.username, "john")
-        self.assertEqual(config.credentials_dir, Path("/tmp/creds"))
+        self.assertEqual(config.credentials_path, Path("/tmp/creds"))
         self.assertEqual(len(config.vpns), 1)
 
     def test_get_vpn_found(self):
         config = AppConfig(
             username="",
-            credentials_dir=Path("/tmp"),
+            credentials_path=Path("/tmp"),
             up_script=None,
             vpns=[
                 VPNConfig(
@@ -106,7 +106,7 @@ class TestAppConfig(unittest.TestCase):
     def test_get_vpn_case_insensitive(self):
         config = AppConfig(
             username="",
-            credentials_dir=Path("/tmp"),
+            credentials_path=Path("/tmp"),
             up_script=None,
             vpns=[
                 VPNConfig(
@@ -123,7 +123,7 @@ class TestAppConfig(unittest.TestCase):
     def test_get_vpn_not_found(self):
         config = AppConfig(
             username="",
-            credentials_dir=Path("/tmp"),
+            credentials_path=Path("/tmp"),
             up_script=None,
             vpns=[
                 VPNConfig(
@@ -138,7 +138,7 @@ class TestAppConfig(unittest.TestCase):
     def test_vpn_names(self):
         config = AppConfig(
             username="",
-            credentials_dir=Path("/tmp"),
+            credentials_path=Path("/tmp"),
             up_script=None,
             vpns=[
                 VPNConfig(
@@ -157,7 +157,7 @@ class TestAppConfig(unittest.TestCase):
 
     def test_add_vpn(self):
         config = AppConfig(
-            username="", credentials_dir=Path("/tmp"), up_script=None, vpns=[]
+            username="", credentials_path=Path("/tmp"), up_script=None, vpns=[]
         )
         vpn = VPNConfig(
             name="EXT",
@@ -171,7 +171,7 @@ class TestAppConfig(unittest.TestCase):
     def test_add_vpn_replaces_existing(self):
         config = AppConfig(
             username="",
-            credentials_dir=Path("/tmp"),
+            credentials_path=Path("/tmp"),
             up_script=None,
             vpns=[
                 VPNConfig(
@@ -193,7 +193,7 @@ class TestAppConfig(unittest.TestCase):
     def test_remove_vpn(self):
         config = AppConfig(
             username="",
-            credentials_dir=Path("/tmp"),
+            credentials_path=Path("/tmp"),
             up_script=None,
             vpns=[
                 VPNConfig(
@@ -209,7 +209,7 @@ class TestAppConfig(unittest.TestCase):
 
     def test_remove_vpn_not_found(self):
         config = AppConfig(
-            username="", credentials_dir=Path("/tmp"), up_script=None, vpns=[]
+            username="", credentials_path=Path("/tmp"), up_script=None, vpns=[]
         )
         result = config.remove_vpn("ext")
         self.assertFalse(result)
@@ -217,7 +217,7 @@ class TestAppConfig(unittest.TestCase):
     def test_to_dict(self):
         config = AppConfig(
             username="john",
-            credentials_dir=Path("/tmp/creds"),
+            credentials_path=Path("/tmp/creds"),
             up_script=Path("/etc/vpn/up.sh"),
             vpns=[
                 VPNConfig(
@@ -229,7 +229,7 @@ class TestAppConfig(unittest.TestCase):
         )
         data = config.to_dict()
         self.assertEqual(data["username"], "john")
-        self.assertEqual(data["credentials_dir"], "/tmp/creds")
+        self.assertEqual(data["credentials_path"], "/tmp/creds")  # YAML key
         self.assertEqual(data["up_script"], "/etc/vpn/up.sh")
         self.assertEqual(len(data["vpns"]), 1)
 
@@ -248,7 +248,7 @@ class TestAppConfigSaveLoad(unittest.TestCase):
 
             config = AppConfig(
                 username="john",
-                credentials_dir=Path("/tmp/creds"),
+                credentials_path=Path("/tmp/creds"),
                 up_script=None,
                 vpns=[
                     VPNConfig(
@@ -263,7 +263,7 @@ class TestAppConfigSaveLoad(unittest.TestCase):
 
             loaded = AppConfig.load(config_path)
             self.assertEqual(loaded.username, "john")
-            self.assertEqual(loaded.credentials_dir, Path("/tmp/creds"))
+            self.assertEqual(loaded.credentials_path, Path("/tmp/creds"))
             self.assertEqual(len(loaded.vpns), 1)
             self.assertEqual(loaded.vpns[0].name, "EXT")
             self.assertTrue(loaded.vpns[0].needs_up_script)
@@ -276,7 +276,7 @@ class TestAppConfigSaveLoad(unittest.TestCase):
         )
         config = AppConfig.empty(xdg)
         self.assertEqual(config.username, "")
-        self.assertEqual(config.credentials_dir, Path("/tmp/data/credentials"))
+        self.assertEqual(config.credentials_path, Path("/tmp/data/credentials"))
         self.assertEqual(len(config.vpns), 0)
 
 
@@ -298,13 +298,14 @@ class TestXDGPaths(unittest.TestCase):
         )
         self.assertEqual(xdg.config_file, Path("/tmp/config/config.yaml"))
 
-    def test_credentials_dir(self):
+    def test_credentials_path(self):
+        """Test credentials_path property."""
         xdg = XDGPaths(
             config_home=Path("/tmp/config"),
             data_home=Path("/tmp/data"),
             cache_home=Path("/tmp/cache"),
         )
-        self.assertEqual(xdg.credentials_dir, Path("/tmp/data/credentials"))
+        self.assertEqual(xdg.credentials_path, Path("/tmp/data/credentials"))
 
     def test_logs_dir(self):
         xdg = XDGPaths(

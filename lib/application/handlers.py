@@ -189,7 +189,7 @@ class SetupHandler(CommandHandler):
             self.display.print("  Username: not set (will prompt)")
 
         if self.config.is_credentials_configured():
-            self.display.print("  Credentials: configured")
+            self.display.print(f"  Credentials: {self.config.credentials_path}.gpg")
         else:
             self.display.print("  Credentials: not set (will prompt)")
 
@@ -351,6 +351,8 @@ class SetupHandler(CommandHandler):
         if not self._check_gpg():
             return
 
+        self.display.print(f"\nCredentials will be stored at: {self.config.credentials_path}.gpg")
+
         gpg_id = self.display.input("\nGPG key ID: ").strip()
         if not gpg_id:
             self.display.error("GPG key ID is required")
@@ -358,25 +360,25 @@ class SetupHandler(CommandHandler):
 
         if not self.store:
             # Import here to avoid circular dependency
-            from infrastructure.password_store import PassPasswordStore
+            from infrastructure.password_store import GPGPasswordStore
 
-            self.store = PassPasswordStore(self.config.credentials_dir)
+            self.store = GPGPasswordStore(self.config.credentials_path)
 
         self.display.print("\nInitializing password store...")
         if not self.store.initialize(gpg_id):
             self.display.error("Error: Failed to init password store")
             return
 
-        if self.config.username:
-            self.display.print("\nEnter password:")
-            if not self.store.store_password(self.config.username):
-                self.display.error("Error: Failed to store password")
-                return
-            self.display.print("\nCredentials configured!")
-        else:
-            self.display.print(
-                "\nPassword store initialized. Set username to store password."
-            )
+        # Prompt for password
+        password = getpass.getpass("Password: ")
+        if not password:
+            self.display.print("\nNo password entered. You can add it later.")
+            return
+
+        if not self.store.store_password(password):
+            self.display.error("Error: Failed to store password")
+            return
+        self.display.print("\nCredentials configured!")
 
     def _check_gpg(self) -> bool:
         """Check if GPG keys are available."""
