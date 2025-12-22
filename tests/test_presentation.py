@@ -27,7 +27,7 @@ from application.commands import (
     SetupCommand,
     ListCommand,
     ConnectCommand,
-    ConnectBothCommand,
+    ConnectAllCommand,
 )
 
 
@@ -194,10 +194,10 @@ class TestStatusLine(unittest.TestCase):
             result = self.status.format_plain(status)
             self.assertEqual(len(result), StatusLine.WIDTH)
 
-    def test_format_line(self):
-        result = self.status.format_line(Status.CONNECTED, Status.DISCONNECTED, 0)
-        self.assertIn("EXT", result)
-        self.assertIn("INT", result)
+    def test_format_with_label(self):
+        result = self.status.format("PROD", Status.CONNECTED, 0)
+        self.assertIn("PROD", result)
+        self.assertIn("●", result)
 
 
 class TestTUI(unittest.TestCase):
@@ -207,15 +207,15 @@ class TestTUI(unittest.TestCase):
         self.tui = TUI()
 
     def test_log_box_heights_positive(self):
-        ext_h, int_h = self.tui._log_box_heights(24, self.tui.STATUS_HEIGHT)
-        self.assertGreater(ext_h, 0)
-        self.assertGreater(int_h, 0)
+        h1, h2 = self.tui._log_box_heights(24, self.tui.STATUS_HEIGHT)
+        self.assertGreater(h1, 0)
+        self.assertGreater(h2, 0)
 
     def test_log_box_heights_fills_screen(self):
         """Box heights should fill the entire terminal height."""
         for h in [20, 21, 24, 25, 30, 31]:
-            ext_h, int_h = self.tui._log_box_heights(h, self.tui.STATUS_HEIGHT)
-            total = self.tui.STATUS_HEIGHT + ext_h + int_h
+            h1, h2 = self.tui._log_box_heights(h, self.tui.STATUS_HEIGHT)
+            total = self.tui.STATUS_HEIGHT + h1 + h2
             self.assertEqual(total, h, f"Failed for height {h}")
 
     def test_render_box_structure(self):
@@ -232,36 +232,6 @@ class TestTUI(unittest.TestCase):
         self.assertNotIn("x", lines[2])
         self.assertIn("x", lines[3])
 
-    def test_render_includes_status(self):
-        state = VPNState(ext_status=Status.CONNECTED, int_status=Status.DISCONNECTED)
-        result = self.tui.render(state, 60, 20)
-        self.assertIn("Status", result)
-
-    def test_render_includes_logs(self):
-        state = VPNState()
-        result = self.tui.render(state, 60, 20)
-        self.assertIn("EXT Log", result)
-        self.assertIn("INT Log", result)
-
-    def test_render_shows_hint_when_no_prompt(self):
-        state = VPNState()
-        result = self.tui.render(state, 60, 20)
-        self.assertIn("Ctrl+C to disconnect", result)
-
-    def test_render_shows_prompt_when_set(self):
-        state = VPNState(prompt="Enter code: ")
-        result = self.tui.render(state, 60, 20)
-        self.assertIn("Enter code:", result)
-        self.assertNotIn("Ctrl+C", result)
-
-    def test_render_consistent_width(self):
-        state = VPNState()
-        result = self.tui.render(state, 60, 20)
-        for line in result.split("\n"):
-            stripped = strip_ansi(line)
-            if stripped:
-                self.assertEqual(len(stripped), 60)
-
 
 class TestCLI(unittest.TestCase):
     """Tests for CLI class."""
@@ -277,19 +247,11 @@ class TestCLI(unittest.TestCase):
         cmd = self.cli.parse(["list"])
         self.assertIsInstance(cmd, ListCommand)
 
-    def test_parse_ext(self):
-        cmd = self.cli.parse(["ext"])
-        self.assertIsInstance(cmd, ConnectCommand)
-        self.assertEqual(cmd.vpn_type.name, "EXT")
-
-    def test_parse_int(self):
-        cmd = self.cli.parse(["int"])
-        self.assertIsInstance(cmd, ConnectCommand)
-        self.assertEqual(cmd.vpn_type.name, "INT")
-
-    def test_parse_both(self):
-        cmd = self.cli.parse(["both"])
-        self.assertIsInstance(cmd, ConnectBothCommand)
+    def test_parse_all_without_config(self):
+        """Without config, 'all' returns empty VPN list."""
+        cmd = self.cli.parse(["all"])
+        self.assertIsInstance(cmd, ConnectAllCommand)
+        self.assertEqual(len(cmd.vpn_types), 0)
 
     def test_parse_connect_with_vpn(self):
         cmd = self.cli.parse(["connect", "custom"])
@@ -380,12 +342,12 @@ class TestBandwidthLine(unittest.TestCase):
 
     def test_format_contains_label(self):
         stats = BandwidthStats()
-        result = self.bw.format(stats, "EXT")
-        self.assertIn("EXT", result)
+        result = self.bw.format(stats, "PROD")
+        self.assertIn("PROD", result)
 
     def test_format_contains_arrows(self):
         stats = BandwidthStats()
-        result = self.bw.format(stats, "EXT")
+        result = self.bw.format(stats, "PROD")
         self.assertIn("↓", result)
         self.assertIn("↑", result)
 
@@ -393,25 +355,25 @@ class TestBandwidthLine(unittest.TestCase):
         stats = BandwidthStats()
         stats.update(1000, 500, 1.0)
         stats.update(2024, 1024, 1.0)
-        result = self.bw.format(stats, "EXT")
+        result = self.bw.format(stats, "PROD")
         self.assertIn("/s", result)
 
     def test_format_shows_total(self):
         stats = BandwidthStats()
         stats.update(1024 * 1024, 512 * 1024, 1.0)
-        result = self.bw.format(stats, "EXT")
+        result = self.bw.format(stats, "PROD")
         self.assertIn("MB", result)
 
     def test_format_with_status_connected(self):
         stats = BandwidthStats()
-        result = self.bw.format_with_status(stats, "EXT", Status.CONNECTED)
-        self.assertIn("EXT", result)
+        result = self.bw.format_with_status(stats, "PROD", Status.CONNECTED)
+        self.assertIn("PROD", result)
         self.assertIn("●", result)
         self.assertIn("↓", result)
 
     def test_format_with_status_connecting(self):
         stats = BandwidthStats()
-        result = self.bw.format_with_status(stats, "EXT", Status.CONNECTING, 0)
+        result = self.bw.format_with_status(stats, "PROD", Status.CONNECTING, 0)
         self.assertIn(SPINNER[0], result)
 
 
@@ -421,33 +383,27 @@ class TestTUIBandwidth(unittest.TestCase):
     def setUp(self):
         self.tui = TUI()
 
-    def test_has_bandwidth_false_initially(self):
+    def test_render_single_without_bandwidth(self):
         state = VPNState()
-        self.assertFalse(self.tui._has_bandwidth(state))
-
-    def test_has_bandwidth_true_with_data(self):
-        state = VPNState()
-        state.ext_bandwidth.total_in = 1000
-        self.assertTrue(self.tui._has_bandwidth(state))
-
-    def test_render_without_bandwidth(self):
-        state = VPNState()
-        result = self.tui.render(state, 60, 20)
+        result = self.tui.render_single(state, "PROD", 60, 20)
         self.assertNotIn("↓", result)
 
-    def test_render_with_bandwidth(self):
+    def test_render_single_with_bandwidth(self):
+        from domain.value_objects import VPNType
+
         state = VPNState()
-        state.ext_bandwidth.total_in = 1000
-        state.int_bandwidth.total_in = 500
-        result = self.tui.render(state, 80, 20)
+        state.get_bandwidth(VPNType("PROD")).total_in = 1000
+        result = self.tui.render_single(state, "PROD", 80, 20)
         self.assertIn("↓", result)
         self.assertIn("↑", result)
 
-    def test_render_with_bandwidth_shows_status_icon(self):
+    def test_render_single_with_bandwidth_shows_status_icon(self):
+        from domain.value_objects import VPNType
+
         state = VPNState()
-        state.ext_bandwidth.total_in = 1000
-        state.ext_status = Status.CONNECTED
-        result = self.tui.render(state, 80, 20)
+        state.get_bandwidth(VPNType("PROD")).total_in = 1000
+        state.set_status(VPNType("PROD"), Status.CONNECTED)
+        result = self.tui.render_single(state, "PROD", 80, 20)
         self.assertIn("●", result)
 
 
@@ -458,57 +414,36 @@ class TestTUISingle(unittest.TestCase):
         self.tui = TUI()
 
     def test_render_single_includes_status(self):
-        state = VPNState(ext_status=Status.CONNECTED)
-        result = self.tui.render_single(state, "EXT", 60, 20)
+        from domain.value_objects import VPNType
+
+        state = VPNState()
+        state.set_status(VPNType("PROD"), Status.CONNECTED)
+        result = self.tui.render_single(state, "PROD", 60, 20)
         self.assertIn("Status", result)
 
     def test_render_single_includes_log(self):
         state = VPNState()
-        result = self.tui.render_single(state, "EXT", 60, 20)
-        self.assertIn("EXT Log", result)
-
-    def test_render_single_int_log(self):
-        state = VPNState()
-        result = self.tui.render_single(state, "INT", 60, 20)
-        self.assertIn("INT Log", result)
+        result = self.tui.render_single(state, "PROD", 60, 20)
+        self.assertIn("PROD Log", result)
 
     def test_render_single_shows_hint_when_no_prompt(self):
         state = VPNState()
-        result = self.tui.render_single(state, "EXT", 60, 20)
+        result = self.tui.render_single(state, "PROD", 60, 20)
         self.assertIn("Ctrl+C to disconnect", result)
 
     def test_render_single_shows_prompt_when_set(self):
         state = VPNState(prompt="Enter code: ")
-        result = self.tui.render_single(state, "EXT", 60, 20)
+        result = self.tui.render_single(state, "PROD", 60, 20)
         self.assertIn("Enter code:", result)
         self.assertNotIn("Ctrl+C", result)
 
     def test_render_single_consistent_width(self):
         state = VPNState()
-        result = self.tui.render_single(state, "EXT", 60, 20)
+        result = self.tui.render_single(state, "PROD", 60, 20)
         for line in result.split("\n"):
             stripped = strip_ansi(line)
             if stripped:
                 self.assertEqual(len(stripped), 60)
-
-    def test_render_single_without_bandwidth(self):
-        state = VPNState()
-        result = self.tui.render_single(state, "EXT", 60, 20)
-        self.assertNotIn("↓", result)
-
-    def test_render_single_with_bandwidth(self):
-        state = VPNState()
-        state.ext_bandwidth.total_in = 1000
-        result = self.tui.render_single(state, "EXT", 80, 20)
-        self.assertIn("↓", result)
-        self.assertIn("↑", result)
-
-    def test_render_single_with_bandwidth_shows_status_icon(self):
-        state = VPNState()
-        state.ext_bandwidth.total_in = 1000
-        state.ext_status = Status.CONNECTED
-        result = self.tui.render_single(state, "EXT", 80, 20)
-        self.assertIn("●", result)
 
     def test_display_with_vpn_name_uses_render_single(self):
         """Verify display() routes to render_single when vpn_name is provided."""
@@ -521,6 +456,168 @@ class TestTUISingle(unittest.TestCase):
             self.assertTrue(callable(self.tui.display))
         except Exception as e:
             self.fail(f"display() failed with vpn_name: {e}")
+
+
+class TestTUITwo(unittest.TestCase):
+    """Tests for two VPN TUI rendering (render_two)."""
+
+    def setUp(self):
+        self.tui = TUI()
+
+    def test_render_two_includes_both_vpn_names(self):
+        state = VPNState()
+        state.initialize(["PROD", "DEV"])
+        result = self.tui.render_two(state, ["PROD", "DEV"], 80, 24)
+        self.assertIn("PROD", result)
+        self.assertIn("DEV", result)
+
+    def test_render_two_includes_logs(self):
+        state = VPNState()
+        state.initialize(["PROD", "DEV"])
+        result = self.tui.render_two(state, ["PROD", "DEV"], 80, 24)
+        self.assertIn("PROD Log", result)
+        self.assertIn("DEV Log", result)
+
+    def test_render_two_shows_hint_when_no_prompt(self):
+        state = VPNState()
+        state.initialize(["PROD", "DEV"])
+        result = self.tui.render_two(state, ["PROD", "DEV"], 80, 24)
+        self.assertIn("Ctrl+C to disconnect", result)
+
+    def test_render_two_shows_prompt_when_set(self):
+        state = VPNState()
+        state.initialize(["PROD", "DEV"])
+        state.prompt = "Enter code: "
+        result = self.tui.render_two(state, ["PROD", "DEV"], 80, 24)
+        self.assertIn("Enter code:", result)
+        self.assertNotIn("Ctrl+C", result)
+
+    def test_render_two_consistent_width(self):
+        state = VPNState()
+        state.initialize(["PROD", "DEV"])
+        result = self.tui.render_two(state, ["PROD", "DEV"], 80, 24)
+        for line in result.split("\n"):
+            stripped = strip_ansi(line)
+            if stripped:
+                self.assertEqual(len(stripped), 80)
+
+    def test_render_two_with_bandwidth(self):
+        from domain.value_objects import VPNType
+
+        state = VPNState()
+        state.initialize(["PROD", "DEV"])
+        state.get_bandwidth(VPNType("PROD")).total_in = 1000
+        state.get_bandwidth(VPNType("DEV")).total_in = 500
+        result = self.tui.render_two(state, ["PROD", "DEV"], 80, 24)
+        self.assertIn("↓", result)
+        self.assertIn("↑", result)
+
+
+class TestTUIMulti(unittest.TestCase):
+    """Tests for N VPN TUI rendering (render_multi)."""
+
+    def setUp(self):
+        self.tui = TUI()
+
+    def test_render_multi_includes_all_vpn_names(self):
+        state = VPNState()
+        vpn_names = ["PROD", "DEV", "STAGING"]
+        state.initialize(vpn_names)
+        result = self.tui.render_multi(state, vpn_names, 80, 30)
+        for name in vpn_names:
+            self.assertIn(name, result)
+
+    def test_render_multi_includes_all_logs(self):
+        state = VPNState()
+        vpn_names = ["PROD", "DEV", "STAGING"]
+        state.initialize(vpn_names)
+        result = self.tui.render_multi(state, vpn_names, 80, 30)
+        for name in vpn_names:
+            self.assertIn(f"{name} Log", result)
+
+    def test_render_multi_shows_hint_when_no_prompt(self):
+        state = VPNState()
+        vpn_names = ["PROD", "DEV", "STAGING"]
+        state.initialize(vpn_names)
+        result = self.tui.render_multi(state, vpn_names, 80, 30)
+        self.assertIn("Ctrl+C to disconnect", result)
+
+    def test_render_multi_shows_prompt_when_set(self):
+        state = VPNState()
+        vpn_names = ["PROD", "DEV", "STAGING"]
+        state.initialize(vpn_names)
+        state.prompt = "2FA code: "
+        result = self.tui.render_multi(state, vpn_names, 80, 30)
+        self.assertIn("2FA code:", result)
+        self.assertNotIn("Ctrl+C", result)
+
+    def test_render_multi_consistent_width(self):
+        state = VPNState()
+        vpn_names = ["PROD", "DEV", "STAGING"]
+        state.initialize(vpn_names)
+        result = self.tui.render_multi(state, vpn_names, 80, 30)
+        for line in result.split("\n"):
+            stripped = strip_ansi(line)
+            if stripped:
+                self.assertEqual(len(stripped), 80)
+
+    def test_render_multi_four_vpns(self):
+        state = VPNState()
+        vpn_names = ["PROD", "DEV", "STAGING", "TEST"]
+        state.initialize(vpn_names)
+        result = self.tui.render_multi(state, vpn_names, 80, 40)
+        for name in vpn_names:
+            self.assertIn(name, result)
+            self.assertIn(f"{name} Log", result)
+
+
+class TestTUIDisplayNormalization(unittest.TestCase):
+    """Tests for display() method vpn_names normalization."""
+
+    def setUp(self):
+        self.tui = TUI()
+
+    def test_normalize_string(self):
+        result = self.tui._normalize_vpn_names("PROD")
+        self.assertEqual(result, ["PROD"])
+
+    def test_normalize_list(self):
+        result = self.tui._normalize_vpn_names(["PROD", "DEV"])
+        self.assertEqual(result, ["PROD", "DEV"])
+
+    def test_normalize_single_item_list(self):
+        result = self.tui._normalize_vpn_names(["PROD"])
+        self.assertEqual(result, ["PROD"])
+
+
+class TestTUIPositionInput(unittest.TestCase):
+    """Tests for position_input row calculation."""
+
+    def setUp(self):
+        self.tui = TUI()
+
+    def test_position_input_single_vpn(self):
+        # Single VPN: row 3 (top, content, prompt)
+        # We can't easily test the actual cursor position, but we can verify
+        # the method doesn't error with a single VPN name
+        try:
+            self.tui.position_input("Enter code: ", "PROD")
+        except Exception as e:
+            self.fail(f"position_input failed with single VPN: {e}")
+
+    def test_position_input_two_vpns(self):
+        # Two VPNs: row 4 (top, cells, separator, prompt)
+        try:
+            self.tui.position_input("Enter code: ", ["PROD", "DEV"])
+        except Exception as e:
+            self.fail(f"position_input failed with two VPNs: {e}")
+
+    def test_position_input_three_vpns(self):
+        # Three VPNs: row 5 (top + 3 status lines + prompt = row 5)
+        try:
+            self.tui.position_input("Enter code: ", ["PROD", "DEV", "STAGING"])
+        except Exception as e:
+            self.fail(f"position_input failed with three VPNs: {e}")
 
 
 if __name__ == "__main__":

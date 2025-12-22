@@ -13,7 +13,7 @@ from application.commands import (
     SetupCommand,
     ListCommand,
     ConnectCommand,
-    ConnectBothCommand,
+    ConnectAllCommand,
 )
 from application.handlers import ListHandler
 
@@ -30,12 +30,13 @@ class TestCommands(unittest.TestCase):
         self.assertIsInstance(cmd, ListCommand)
 
     def test_connect_command(self):
-        cmd = ConnectCommand(VPNType("EXT"))
-        self.assertEqual(cmd.vpn_type.name, "EXT")
+        cmd = ConnectCommand(VPNType("PROD"))
+        self.assertEqual(cmd.vpn_type.name, "PROD")
 
-    def test_connect_both_command(self):
-        cmd = ConnectBothCommand()
-        self.assertIsInstance(cmd, ConnectBothCommand)
+    def test_connect_all_command(self):
+        cmd = ConnectAllCommand([VPNType("PROD"), VPNType("DEV")])
+        self.assertIsInstance(cmd, ConnectAllCommand)
+        self.assertEqual(len(cmd.vpn_types), 2)
 
 
 class TestListHandler(unittest.TestCase):
@@ -47,7 +48,7 @@ class TestListHandler(unittest.TestCase):
         self.handler = ListHandler(self.mock_service, self.mock_display)
 
     def test_handle_lists_vpns(self):
-        self.mock_service.list_vpns.return_value = [VPNType("EXT"), VPNType("INT")]
+        self.mock_service.list_vpns.return_value = [VPNType("PROD"), VPNType("DEV")]
 
         result = self.handler.handle(ListCommand())
 

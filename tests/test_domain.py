@@ -128,32 +128,33 @@ class TestVPNState(unittest.TestCase):
 
     def test_default_state(self):
         state = VPNState()
-        self.assertEqual(state.ext_status, Status.DISCONNECTED)
-        self.assertEqual(state.int_status, Status.DISCONNECTED)
-        self.assertEqual(state.ext_log, "")
-        self.assertEqual(state.int_log, "")
+        # Uninitialized VPNs return defaults
+        self.assertEqual(state.get_status(VPNType("PROD")), Status.DISCONNECTED)
+        self.assertEqual(state.get_log(VPNType("PROD")), "")
         self.assertEqual(state.spinner_frame, 0)
         self.assertEqual(state.prompt, "")
 
-    def test_set_ext_status(self):
+    def test_set_status(self):
         state = VPNState()
-        state.set_status(VPNType("EXT"), Status.CONNECTED)
-        self.assertEqual(state.ext_status, Status.CONNECTED)
+        state.set_status(VPNType("PROD"), Status.CONNECTED)
+        self.assertEqual(state.get_status(VPNType("PROD")), Status.CONNECTED)
 
-    def test_set_int_status(self):
+    def test_set_log(self):
         state = VPNState()
-        state.set_status(VPNType("INT"), Status.CONNECTING)
-        self.assertEqual(state.int_status, Status.CONNECTING)
+        state.set_log(VPNType("PROD"), "/tmp/prod.log")
+        self.assertEqual(state.get_log(VPNType("PROD")), "/tmp/prod.log")
 
-    def test_set_ext_log(self):
+    def test_get_bandwidth(self):
         state = VPNState()
-        state.set_log(VPNType("EXT"), "/tmp/ext.log")
-        self.assertEqual(state.ext_log, "/tmp/ext.log")
+        bw = state.get_bandwidth(VPNType("PROD"))
+        self.assertEqual(bw.total_in, 0)
+        self.assertEqual(bw.total_out, 0)
 
-    def test_set_int_log(self):
+    def test_initialize(self):
         state = VPNState()
-        state.set_log(VPNType("INT"), "/tmp/int.log")
-        self.assertEqual(state.int_log, "/tmp/int.log")
+        state.initialize(["PROD", "DEV"])
+        self.assertEqual(state.get_status(VPNType("PROD")), Status.DISCONNECTED)
+        self.assertEqual(state.get_status(VPNType("DEV")), Status.DISCONNECTED)
 
     def test_advance_spinner(self):
         state = VPNState()
@@ -168,26 +169,26 @@ class TestVPNConnection(unittest.TestCase):
     """Tests for VPNConnection entity."""
 
     def test_default_connection(self):
-        conn = VPNConnection(VPNType("EXT"))
-        self.assertEqual(conn.vpn_type.name, "EXT")
+        conn = VPNConnection(VPNType("PROD"))
+        self.assertEqual(conn.vpn_type.name, "PROD")
         self.assertEqual(conn.status, Status.DISCONNECTED)
         self.assertIsNone(conn.log_path)
         self.assertIsNone(conn.pid)
 
     def test_is_active_disconnected(self):
-        conn = VPNConnection(VPNType("EXT"))
+        conn = VPNConnection(VPNType("PROD"))
         self.assertFalse(conn.is_active())
 
     def test_is_active_connecting(self):
-        conn = VPNConnection(VPNType("EXT"), Status.CONNECTING)
+        conn = VPNConnection(VPNType("PROD"), Status.CONNECTING)
         self.assertTrue(conn.is_active())
 
     def test_is_active_connected(self):
-        conn = VPNConnection(VPNType("EXT"), Status.CONNECTED)
+        conn = VPNConnection(VPNType("PROD"), Status.CONNECTED)
         self.assertTrue(conn.is_active())
 
     def test_is_active_waiting(self):
-        conn = VPNConnection(VPNType("EXT"), Status.WAITING)
+        conn = VPNConnection(VPNType("PROD"), Status.WAITING)
         self.assertFalse(conn.is_active())
 
 
