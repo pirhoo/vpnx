@@ -2,6 +2,7 @@
 
 from abc import ABC
 from dataclasses import dataclass
+from typing import List
 
 from domain.value_objects import VPNType
 
@@ -34,7 +35,7 @@ class ConnectCommand(Command):
 
 
 @dataclass
-class ConnectBothCommand(Command):
-    """Connect to both VPNs in fullscreen mode command."""
+class ConnectAllCommand(Command):
+    """Connect to all configured VPNs in sequence."""
 
-    pass
+    vpn_types: List[VPNType]

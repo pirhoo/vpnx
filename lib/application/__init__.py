@@ -5,7 +5,7 @@ from application.commands import (
     SetupCommand,
     ListCommand,
     ConnectCommand,
-    ConnectBothCommand,
+    ConnectAllCommand,
 )
 from application.handlers import CommandHandler
 
@@ -14,6 +14,6 @@ __all__ = [
     "SetupCommand",
     "ListCommand",
     "ConnectCommand",
-    "ConnectBothCommand",
+    "ConnectAllCommand",
     "CommandHandler",
 ]
