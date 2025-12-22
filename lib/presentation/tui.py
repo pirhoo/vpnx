@@ -1,8 +1,9 @@
 """TUI rendering components."""
 
-from typing import List
+from typing import List, Union
 
 from domain import VPNState, Status, BandwidthStats
+from domain.value_objects import VPNType
 from infrastructure.log_reader import LogReader
 from presentation.terminal import Terminal, visible_len
 
@@ -285,11 +286,6 @@ class StatusLine:
             return f"{lbl} {color}{icon} {text}{self.term.reset()}"
         return f"{label} {icon} {text}"
 
-    def format_line(self, ext: Status, int_: Status, frame: int) -> str:
-        ext_c = self.format("EXT", ext, frame)
-        int_c = self.format("INT", int_, frame)
-        return f"{ext_c}  {int_c}"
-
 
 class TUI:
     """Main TUI renderer."""
@@ -302,10 +298,6 @@ class TUI:
         self.status = StatusLine(self.term)
         self.bandwidth = BandwidthLine(self.term)
         self.log_reader = log_reader or LogReader()
-
-    def _has_bandwidth(self, state: VPNState) -> bool:
-        """Check if we have bandwidth data to display."""
-        return state.ext_bandwidth.total_in > 0 or state.int_bandwidth.total_in > 0
 
     def _log_box_heights(self, height: int, status_height: int) -> tuple:
         """Calculate log box heights, distributing remainder to first box."""
@@ -327,56 +319,6 @@ class TUI:
         out.append(self.box.bottom(w))
         return out
 
-    def render(self, state: VPNState, w: int = None, h: int = None) -> str:
-        w, h = w or self.term.width, h or self.term.height
-        ext_box_h, int_box_h = self._log_box_heights(h, self.STATUS_HEIGHT)
-        ext_lines_n, int_lines_n = ext_box_h - 2, int_box_h - 2
-        clr = self.term.clear_line()
-
-        # Split position for two-column layout (middle of box)
-        split = w // 2
-
-        lines = []
-        lines.append(self.box.top_split("Status", w, split))
-
-        # Show status in two cells (EXT left, INT right)
-        # Cell content width: split - 3 for left cell, w - split - 4 for right
-        left_width = split - 3
-        right_width = w - split - 4
-
-        if self._has_bandwidth(state):
-            ext_cell = self.bandwidth.format_with_status(
-                state.ext_bandwidth,
-                "EXT",
-                state.ext_status,
-                state.spinner_frame,
-                left_width,
-            )
-            int_cell = self.bandwidth.format_with_status(
-                state.int_bandwidth,
-                "INT",
-                state.int_status,
-                state.spinner_frame,
-                right_width,
-            )
-        else:
-            ext_cell = self.status.format("EXT", state.ext_status, state.spinner_frame)
-            int_cell = self.status.format("INT", state.int_status, state.spinner_frame)
-
-        lines.append(self.box.two_cells(ext_cell, int_cell, w, split))
-        lines.append(self.box.separator_join(w, split))
-
-        hint = f"{self.term.color('dim')}Ctrl+C to disconnect{self.term.reset()}"
-        lines.append(self.box.line(state.prompt if state.prompt else hint, w))
-        lines.append(self.box.bottom(w))
-
-        ext_lines = self.log_reader.read_tail(state.ext_log, ext_lines_n)
-        int_lines = self.log_reader.read_tail(state.int_log, int_lines_n)
-        lines.extend(self._render_box("EXT Log", ext_lines, ext_lines_n, w))
-        lines.extend(self._render_box("INT Log", int_lines, int_lines_n, w))
-
-        return self.term.home() + (clr + "\n").join(lines) + clr
-
     def render_single(
         self, state: VPNState, vpn_name: str, w: int = None, h: int = None
     ) -> str:
@@ -387,15 +329,11 @@ class TUI:
         log_lines_n = log_h - 2
         clr = self.term.clear_line()
 
-        # Get the appropriate status/bandwidth/log for this VPN
-        if vpn_name == "EXT":
-            vpn_status = state.ext_status
-            vpn_bandwidth = state.ext_bandwidth
-            vpn_log = state.ext_log
-        else:
-            vpn_status = state.int_status
-            vpn_bandwidth = state.int_bandwidth
-            vpn_log = state.int_log
+        # Get the appropriate status/bandwidth/log for this VPN using generic accessors
+        vpn_type = VPNType(vpn_name)
+        vpn_status = state.get_status(vpn_type)
+        vpn_bandwidth = state.get_bandwidth(vpn_type)
+        vpn_log = state.get_log(vpn_type)
 
         has_bw = vpn_bandwidth.total_in > 0
 
@@ -422,17 +360,157 @@ class TUI:
 
         return self.term.home() + (clr + "\n").join(lines) + clr
 
-    def display(self, state: VPNState, vpn_name: str = None) -> None:
-        if vpn_name:
-            self.term.write(self.render_single(state, vpn_name))
+    def render_two(
+        self, state: VPNState, vpn_names: List[str], w: int = None, h: int = None
+    ) -> str:
+        """Render TUI for two VPNs in side-by-side layout."""
+        w, h = w or self.term.width, h or self.term.height
+        name1, name2 = vpn_names[0], vpn_names[1]
+
+        # Calculate heights
+        first_box_h, second_box_h = self._log_box_heights(h, self.STATUS_HEIGHT)
+        first_lines_n, second_lines_n = first_box_h - 2, second_box_h - 2
+        clr = self.term.clear_line()
+
+        # Split position for two-column layout
+        split = w // 2
+
+        # Get status/bandwidth for each VPN
+        vpn1_type, vpn2_type = VPNType(name1), VPNType(name2)
+        status1 = state.get_status(vpn1_type)
+        status2 = state.get_status(vpn2_type)
+        bw1 = state.get_bandwidth(vpn1_type)
+        bw2 = state.get_bandwidth(vpn2_type)
+        log1 = state.get_log(vpn1_type)
+        log2 = state.get_log(vpn2_type)
+
+        lines = []
+        lines.append(self.box.top_split("Status", w, split))
+
+        # Cell widths
+        left_width = split - 3
+        right_width = w - split - 4
+
+        has_bw = bw1.total_in > 0 or bw2.total_in > 0
+
+        if has_bw:
+            cell1 = self.bandwidth.format_with_status(
+                bw1, name1, status1, state.spinner_frame, left_width
+            )
+            cell2 = self.bandwidth.format_with_status(
+                bw2, name2, status2, state.spinner_frame, right_width
+            )
         else:
-            self.term.write(self.render(state))
+            cell1 = self.status.format(name1, status1, state.spinner_frame)
+            cell2 = self.status.format(name2, status2, state.spinner_frame)
+
+        lines.append(self.box.two_cells(cell1, cell2, w, split))
+        lines.append(self.box.separator_join(w, split))
+
+        hint = f"{self.term.color('dim')}Ctrl+C to disconnect{self.term.reset()}"
+        lines.append(self.box.line(state.prompt if state.prompt else hint, w))
+        lines.append(self.box.bottom(w))
+
+        # Log boxes
+        log1_lines = self.log_reader.read_tail(log1, first_lines_n)
+        log2_lines = self.log_reader.read_tail(log2, second_lines_n)
+        lines.extend(self._render_box(f"{name1} Log", log1_lines, first_lines_n, w))
+        lines.extend(self._render_box(f"{name2} Log", log2_lines, second_lines_n, w))
+
+        return self.term.home() + (clr + "\n").join(lines) + clr
+
+    def render_multi(
+        self, state: VPNState, vpn_names: List[str], w: int = None, h: int = None
+    ) -> str:
+        """Render TUI for N VPNs (3+) in vertical stack layout."""
+        w, h = w or self.term.width, h or self.term.height
+        n = len(vpn_names)
+        clr = self.term.clear_line()
+
+        # Status box: top + N status lines + prompt + bottom = N + 3
+        status_h = n + 3
+        # Remaining height for log boxes, divided equally
+        remaining = h - status_h
+        log_h_per_vpn = max(3, remaining // n)
+
+        lines = []
+        lines.append(self.box.top("Status", w))
+
+        content_width = w - 4
+        has_bw = any(
+            state.get_bandwidth(VPNType(name)).total_in > 0 for name in vpn_names
+        )
+
+        # Render each VPN status line
+        for name in vpn_names:
+            vpn_type = VPNType(name)
+            status = state.get_status(vpn_type)
+            bw = state.get_bandwidth(vpn_type)
+
+            if has_bw:
+                cell = self.bandwidth.format_with_status(
+                    bw, name, status, state.spinner_frame, content_width
+                )
+            else:
+                cell = self.status.format(name, status, state.spinner_frame)
+            lines.append(self.box.line(cell, w))
+
+        hint = f"{self.term.color('dim')}Ctrl+C to disconnect{self.term.reset()}"
+        lines.append(self.box.line(state.prompt if state.prompt else hint, w))
+        lines.append(self.box.bottom(w))
+
+        # Render log boxes for each VPN
+        log_lines_n = log_h_per_vpn - 2
+        for name in vpn_names:
+            vpn_type = VPNType(name)
+            log_path = state.get_log(vpn_type)
+            log_lines = self.log_reader.read_tail(log_path, log_lines_n)
+            lines.extend(self._render_box(f"{name} Log", log_lines, log_lines_n, w))
+
+        return self.term.home() + (clr + "\n").join(lines) + clr
+
+    def _normalize_vpn_names(self, vpn_names: Union[str, List[str]]) -> List[str]:
+        """Normalize vpn_names to a list."""
+        if isinstance(vpn_names, str):
+            return [vpn_names]
+        return vpn_names
+
+    def display(self, state: VPNState, vpn_names: Union[str, List[str]]) -> None:
+        """Display TUI for the given VPN(s).
+
+        Args:
+            state: Current VPN state
+            vpn_names: VPN name(s) to display:
+                - str: single VPN name
+                - List[str]: list of VPN names (1=single, 2=two-column, 3+=stacked)
+        """
+        names = self._normalize_vpn_names(vpn_names)
+
+        if len(names) == 1:
+            self.term.write(self.render_single(state, names[0]))
+        elif len(names) == 2:
+            self.term.write(self.render_two(state, names))
+        else:
+            self.term.write(self.render_multi(state, names))
         self.term.flush()
 
-    def position_input(self, prompt: str, vpn_name: str = None) -> None:
-        # Row 4 for both mode (top, cells, separator, prompt)
-        # Row 3 for single mode (top, content, prompt)
-        row = 3 if vpn_name else 4
+    def position_input(self, prompt: str, vpn_names: Union[str, List[str]]) -> None:
+        """Position cursor at input location.
+
+        Args:
+            prompt: Current prompt text
+            vpn_names: VPN name(s) being displayed
+        """
+        names = self._normalize_vpn_names(vpn_names)
+
+        if len(names) == 1:
+            row = 3  # top, content, prompt
+        elif len(names) == 2:
+            row = 4  # top, cells, separator, prompt
+        else:
+            # For N VPNs: top + N status lines + prompt
+            row = 2 + len(names)
+
         self.term.move_to(row, 3 + len(prompt))
         self.term.flush()
 
