@@ -45,7 +45,7 @@ clean:
 
 install:
 	@echo "No Python dependencies required (stdlib only)"
-	@echo "System dependencies: openvpn pass gpg"
+	@echo "System dependencies: openvpn gpg"
 
 setup:
 	@$(PYTHON) run.py setup
