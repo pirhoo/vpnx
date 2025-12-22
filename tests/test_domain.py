@@ -8,7 +8,7 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
 
 from domain.value_objects import Status, VPNType, Credentials, ConnectionResult
-from domain.entities import VPNState, VPNConnection
+from domain.entities import VPNState, VPNConnection, BandwidthStats
 
 
 class TestStatus(unittest.TestCase):
@@ -189,6 +189,71 @@ class TestVPNConnection(unittest.TestCase):
     def test_is_active_waiting(self):
         conn = VPNConnection(VPNType("EXT"), Status.WAITING)
         self.assertFalse(conn.is_active())
+
+
+class TestBandwidthStats(unittest.TestCase):
+    """Tests for BandwidthStats entity."""
+
+    def test_default_values(self):
+        stats = BandwidthStats()
+        self.assertEqual(stats.total_in, 0)
+        self.assertEqual(stats.total_out, 0)
+        self.assertEqual(stats.rate_in, 0.0)
+        self.assertEqual(stats.rate_out, 0.0)
+        self.assertEqual(stats.history_in, [])
+        self.assertEqual(stats.history_out, [])
+
+    def test_first_update_sets_totals(self):
+        stats = BandwidthStats()
+        stats.update(1000, 500, 1.0)
+        self.assertEqual(stats.total_in, 1000)
+        self.assertEqual(stats.total_out, 500)
+        # First update doesn't calculate rate (no delta)
+        self.assertEqual(stats.rate_in, 0.0)
+        self.assertEqual(stats.rate_out, 0.0)
+
+    def test_second_update_calculates_rate(self):
+        stats = BandwidthStats()
+        stats.update(1000, 500, 1.0)
+        stats.update(2000, 1000, 1.0)
+        self.assertEqual(stats.rate_in, 1000.0)  # (2000-1000)/1.0
+        self.assertEqual(stats.rate_out, 500.0)  # (1000-500)/1.0
+
+    def test_rate_with_different_interval(self):
+        stats = BandwidthStats()
+        stats.update(1000, 500, 1.0)
+        stats.update(2000, 1000, 2.0)
+        self.assertEqual(stats.rate_in, 500.0)  # (2000-1000)/2.0
+        self.assertEqual(stats.rate_out, 250.0)  # (1000-500)/2.0
+
+    def test_history_accumulates(self):
+        stats = BandwidthStats()
+        stats.update(1000, 500, 1.0)
+        stats.update(2000, 1000, 1.0)
+        stats.update(4000, 2000, 1.0)
+        self.assertEqual(len(stats.history_in), 2)
+        self.assertEqual(len(stats.history_out), 2)
+        self.assertEqual(stats.history_in, [1000.0, 2000.0])
+        self.assertEqual(stats.history_out, [500.0, 1000.0])
+
+    def test_history_max_length(self):
+        stats = BandwidthStats()
+        # First update (doesn't add to history)
+        stats.update(100, 50, 1.0)
+        # Add MAX_HISTORY + 5 more updates
+        for i in range(stats.MAX_HISTORY + 5):
+            stats.update(100 * (i + 2), 50 * (i + 2), 1.0)
+        self.assertEqual(len(stats.history_in), stats.MAX_HISTORY)
+        self.assertEqual(len(stats.history_out), stats.MAX_HISTORY)
+
+    def test_zero_interval_skips_rate_calculation(self):
+        stats = BandwidthStats()
+        stats.update(1000, 500, 1.0)
+        stats.update(2000, 1000, 0.0)
+        # Rate should remain 0 since interval is 0
+        self.assertEqual(stats.rate_in, 0.0)
+        # But totals are updated
+        self.assertEqual(stats.total_in, 2000)
 
 
 if __name__ == "__main__":
