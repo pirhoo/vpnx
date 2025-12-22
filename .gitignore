@@ -1,8 +1,6 @@
 certificates/*
 !certificates/.gitkeep
-credentials/*
-!credentials/.gitkeep
-.username
+.claude
 
 # Python
 __pycache__/
