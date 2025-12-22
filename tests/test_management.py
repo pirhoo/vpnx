@@ -17,6 +17,7 @@ from infrastructure.management import (
     ManagementClient,
     ManagementState,
     ManagementEvent,
+    Bytecount,
 )
 
 
@@ -341,6 +342,55 @@ class TestManagementClientIntegration(unittest.TestCase):
         result = client.connect(max_retries=2, initial_delay=0.01)
         self.assertFalse(result)
         self.assertFalse(client.is_connected)
+
+
+class TestBytecount(unittest.TestCase):
+    """Tests for Bytecount dataclass."""
+
+    def test_create_bytecount(self):
+        bc = Bytecount(bytes_in=1000, bytes_out=500)
+        self.assertEqual(bc.bytes_in, 1000)
+        self.assertEqual(bc.bytes_out, 500)
+
+
+class TestManagementClientBytecount(unittest.TestCase):
+    """Tests for bytecount parsing in ManagementClient."""
+
+    def test_parse_bytecount_line_valid(self):
+        client = ManagementClient()
+        bc = client._parse_bytecount_line(">BYTECOUNT:12345,6789")
+        self.assertIsNotNone(bc)
+        self.assertEqual(bc.bytes_in, 12345)
+        self.assertEqual(bc.bytes_out, 6789)
+
+    def test_parse_bytecount_line_large_values(self):
+        client = ManagementClient()
+        bc = client._parse_bytecount_line(">BYTECOUNT:1234567890,9876543210")
+        self.assertIsNotNone(bc)
+        self.assertEqual(bc.bytes_in, 1234567890)
+        self.assertEqual(bc.bytes_out, 9876543210)
+
+    def test_parse_bytecount_line_invalid(self):
+        client = ManagementClient()
+        self.assertIsNone(client._parse_bytecount_line("not a bytecount"))
+        self.assertIsNone(client._parse_bytecount_line(">BYTECOUNT:invalid"))
+        self.assertIsNone(client._parse_bytecount_line(">BYTECOUNT:123"))
+
+    def test_get_bytecount_initial_none(self):
+        client = ManagementClient()
+        self.assertIsNone(client.get_bytecount())
+
+    def test_bytecount_updated_on_read(self):
+        client = ManagementClient()
+        # Manually set buffer with bytecount line
+        client._buffer = ">BYTECOUNT:1000,500\n"
+        client._socket = Mock()
+        client._socket.recv.side_effect = BlockingIOError
+        client.read_events()
+        bc = client.get_bytecount()
+        self.assertIsNotNone(bc)
+        self.assertEqual(bc.bytes_in, 1000)
+        self.assertEqual(bc.bytes_out, 500)
 
 
 if __name__ == "__main__":
