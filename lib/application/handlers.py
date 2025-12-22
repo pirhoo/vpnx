@@ -351,7 +351,9 @@ class SetupHandler(CommandHandler):
         if not self._check_gpg():
             return
 
-        self.display.print(f"\nCredentials will be stored at: {self.config.credentials_path}.gpg")
+        self.display.print(
+            f"\nCredentials will be stored at: {self.config.credentials_path}.gpg"
+        )
 
         gpg_id = self.display.input("\nGPG key ID: ").strip()
         if not gpg_id:

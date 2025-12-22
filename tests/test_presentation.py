@@ -447,7 +447,6 @@ class TestTUISingle(unittest.TestCase):
 
     def test_display_with_vpn_name_uses_render_single(self):
         """Verify display() routes to render_single when vpn_name is provided."""
-        state = VPNState()
         # This test ensures the display method accepts vpn_name parameter
         # and routes to render_single (no exception = pass)
         # We can't easily verify output since it writes to stdout

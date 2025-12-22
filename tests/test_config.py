@@ -239,7 +239,7 @@ class TestAppConfigSaveLoad(unittest.TestCase):
 
     def test_save_and_load(self):
         try:
-            import yaml
+            import yaml  # noqa: F401
         except ImportError:
             self.skipTest("PyYAML not installed")
 
