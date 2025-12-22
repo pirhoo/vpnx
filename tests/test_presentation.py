@@ -196,13 +196,17 @@ class TestTUI(unittest.TestCase):
     def setUp(self):
         self.tui = TUI()
 
-    def test_log_lines_count_positive(self):
-        result = self.tui._log_lines_count(24)
-        self.assertGreater(result, 0)
+    def test_log_box_heights_positive(self):
+        ext_h, int_h = self.tui._log_box_heights(24)
+        self.assertGreater(ext_h, 0)
+        self.assertGreater(int_h, 0)
 
-    def test_log_lines_count_minimum(self):
-        result = self.tui._log_lines_count(10)
-        self.assertGreaterEqual(result, 2)
+    def test_log_box_heights_fills_screen(self):
+        """Box heights should fill the entire terminal height."""
+        for h in [20, 21, 24, 25, 30, 31]:
+            ext_h, int_h = self.tui._log_box_heights(h)
+            total = self.tui.STATUS_HEIGHT + ext_h + int_h
+            self.assertEqual(total, h, f"Failed for height {h}")
 
     def test_render_box_structure(self):
         lines = self.tui._render_box("Test", ["a", "b"], 3, 40)
