@@ -127,24 +127,6 @@ class Application:
             return True
         return False
 
-    def _get_username(self) -> str:
-        """Get username from config or prompt."""
-        if self.config and self.config.username:
-            return self.config.username
-        return self.display.input("Username: ").strip()
-
-    def _get_credentials(self, username: str) -> Optional[str]:
-        """Get password from store or prompt."""
-        if self.store and self.store.is_initialized():
-            password = self.store.get_password(username)
-            if password:
-                return password
-
-        # Prompt for password
-        import getpass
-
-        return getpass.getpass("Password: ")
-
     def run(self, args: list = None) -> int:
         """Run the application."""
         command = self.cli.parse(args)
@@ -186,10 +168,8 @@ class Application:
         if not self.check_vpn_running():
             return 0
 
-        username = self._get_username()
-        if not username:
-            self.display.error("Username is required")
-            return 1
+        # Get username from config (may be empty - handlers will prompt)
+        username = self.config.username if self.config else ""
 
         if isinstance(command, ConnectCommand):
             # Get config_dir from VPN config for management interface setup
