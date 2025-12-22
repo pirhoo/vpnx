@@ -7,7 +7,12 @@ from infrastructure.password_store import PassPasswordStore
 from infrastructure.log_reader import LogReader
 from infrastructure.port_allocator import PortAllocator
 from infrastructure.config_parser import OpenVPNConfigParser, ManagementConfig
-from infrastructure.management import ManagementClient, ManagementState, ManagementEvent
+from infrastructure.management import (
+    ManagementClient,
+    ManagementState,
+    ManagementEvent,
+    Bytecount,
+)
 
 __all__ = [
     "CommandRunner",
@@ -21,4 +26,5 @@ __all__ = [
     "ManagementClient",
     "ManagementState",
     "ManagementEvent",
+    "Bytecount",
 ]

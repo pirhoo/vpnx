@@ -34,6 +34,14 @@ class ManagementEvent:
     remote_ip: str = ""
 
 
+@dataclass
+class Bytecount:
+    """Bandwidth data from management interface."""
+
+    bytes_in: int
+    bytes_out: int
+
+
 class ManagementClient:
     """TCP client for OpenVPN management interface."""
 
@@ -42,6 +50,7 @@ class ManagementClient:
         self.port = port
         self._socket: Optional[socket.socket] = None
         self._buffer: str = ""
+        self._last_bytecount: Optional[Bytecount] = None
 
     def connect(self, max_retries: int = 10, initial_delay: float = 0.1) -> bool:
         """Connect to management interface with retry logic."""
@@ -100,8 +109,27 @@ class ManagementClient:
                 event = self._parse_state_line(line)
                 if event:
                     events.append(event)
+            elif line.startswith(">BYTECOUNT:"):
+                bytecount = self._parse_bytecount_line(line)
+                if bytecount:
+                    self._last_bytecount = bytecount
 
         return events
+
+    def _parse_bytecount_line(self, line: str) -> Optional[Bytecount]:
+        """Parse >BYTECOUNT:<bytes_in>,<bytes_out> format."""
+        try:
+            content = line[11:]  # Remove ">BYTECOUNT:"
+            parts = content.split(",")
+            if len(parts) < 2:
+                return None
+            return Bytecount(bytes_in=int(parts[0]), bytes_out=int(parts[1]))
+        except (ValueError, IndexError):
+            return None
+
+    def get_bytecount(self) -> Optional[Bytecount]:
+        """Get the last received bytecount."""
+        return self._last_bytecount
 
     def _parse_state_line(self, line: str) -> Optional[ManagementEvent]:
         """Parse >STATE:<timestamp>,<state>,<desc>,... format."""
