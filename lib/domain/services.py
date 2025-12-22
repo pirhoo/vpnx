@@ -82,11 +82,16 @@ class VPNService:
     """Domain service for VPN operations."""
 
     TIMEOUT = 60
-    UP_SCRIPT_VPNS = ["EXT"]
 
-    def __init__(self, repository: VPNRepository, process_manager: ProcessManager):
+    def __init__(
+        self,
+        repository: VPNRepository,
+        process_manager: ProcessManager,
+        up_script_vpns: Optional[List[str]] = None,
+    ):
         self.repository = repository
         self.process_manager = process_manager
+        self.up_script_vpns = up_script_vpns if up_script_vpns is not None else []
 
     def list_vpns(self) -> List[VPNType]:
         return self.repository.list_available()
@@ -95,7 +100,7 @@ class VPNService:
         return self.repository.exists(vpn_type)
 
     def needs_up_script(self, vpn_type: VPNType) -> bool:
-        return vpn_type.name in self.UP_SCRIPT_VPNS
+        return vpn_type.name in self.up_script_vpns
 
     def connect(
         self,
