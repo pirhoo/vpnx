@@ -1,6 +1,5 @@
-"""Password store integration (pass)."""
+"""Password store using GPG directly."""
 
-import os
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -8,40 +7,83 @@ from typing import Optional
 from domain.services import CredentialStore
 
 
-class PassPasswordStore(CredentialStore):
-    """Password store using 'pass' (password-store)."""
+class GPGPasswordStore(CredentialStore):
+    """Password store using GPG encryption directly.
 
-    def __init__(self, store_dir: Path):
-        self.store_dir = store_dir
+    Takes a base path and derives:
+    - {base_path}.gpg - encrypted password file
+    - {base_path}.gpg-id - GPG key ID file
+    """
 
-    def _env(self) -> dict:
-        """Get environment with PASSWORD_STORE_DIR set."""
-        return {**os.environ, "PASSWORD_STORE_DIR": str(self.store_dir)}
+    def __init__(self, base_path: Path):
+        self.base_path = base_path
+        self.password_file = Path(str(base_path) + ".gpg")
+        self.gpg_id_file = Path(str(base_path) + ".gpg-id")
 
     def get_password(self, username: str) -> Optional[str]:
-        """Get password for username."""
+        """Get stored password (username is ignored - single password store)."""
+        if not self.password_file.exists():
+            return None
+
         try:
             result = subprocess.run(
-                ["pass", "show", username],
+                ["gpg", "--quiet", "--decrypt", str(self.password_file)],
                 capture_output=True,
                 text=True,
-                env=self._env(),
-                timeout=10,
+                timeout=30,
             )
             return result.stdout.strip() if result.returncode == 0 else None
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return None
 
     def is_initialized(self) -> bool:
-        """Check if store is initialized."""
-        return self.store_dir.is_dir() and (self.store_dir / ".gpg-id").exists()
+        """Check if store is initialized with a GPG key."""
+        return self.gpg_id_file.exists()
+
+    def has_password(self) -> bool:
+        """Check if a password is stored."""
+        return self.password_file.exists()
 
     def initialize(self, gpg_id: str) -> bool:
-        """Initialize the password store."""
-        result = subprocess.run(["pass", "init", gpg_id], env=self._env())
-        return result.returncode == 0
+        """Initialize the password store with a GPG key ID."""
+        self.base_path.parent.mkdir(parents=True, exist_ok=True)
+        self.gpg_id_file.write_text(gpg_id.strip() + "\n")
+        return True
 
-    def store_password(self, username: str) -> bool:
-        """Store password interactively."""
-        result = subprocess.run(["pass", "insert", username], env=self._env())
-        return result.returncode == 0
+    def store_password(self, password: str) -> bool:
+        """Store password encrypted with GPG."""
+        if not self.is_initialized():
+            return False
+
+        gpg_id = self.gpg_id_file.read_text().strip()
+        if not gpg_id:
+            return False
+
+        try:
+            result = subprocess.run(
+                [
+                    "gpg",
+                    "--quiet",
+                    "--encrypt",
+                    "--recipient",
+                    gpg_id,
+                    "--output",
+                    str(self.password_file),
+                ],
+                input=password,
+                text=True,
+                timeout=30,
+            )
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return False
+
+    def get_gpg_id(self) -> Optional[str]:
+        """Get the configured GPG key ID."""
+        if not self.gpg_id_file.exists():
+            return None
+        return self.gpg_id_file.read_text().strip()
+
+
+# Backward compatibility alias
+PassPasswordStore = GPGPasswordStore
