@@ -39,7 +39,7 @@ class TUIRenderer(Protocol):
     def cleanup(self) -> None: ...
     def show_cursor(self) -> None: ...
     def hide_cursor(self) -> None: ...
-    def position_input(self, prompt: str, has_bandwidth: bool = False) -> None: ...
+    def position_input(self, prompt: str) -> None: ...
 
 
 class CommandHandler(ABC):
@@ -309,19 +309,12 @@ class ConnectBothHandler(CommandHandler):
             parser.append_management_directive("127.0.0.1", port)
             self.management_ports[vpn_type.name] = port
 
-    def _has_bandwidth(self) -> bool:
-        """Check if we have bandwidth data to display."""
-        return (
-            self.state.ext_bandwidth.total_in > 0
-            or self.state.int_bandwidth.total_in > 0
-        )
-
     def _prompt_management_setup(self) -> bool:
         """Prompt user to enable management interface."""
         self.state.prompt = "Management interface not found. Enable it? [Y/n]: "
         self.tui.show_cursor()
         self.tui.display(self.state)
-        self.tui.position_input(self.state.prompt, self._has_bandwidth())
+        self.tui.position_input(self.state.prompt)
         old_handler = signal.signal(signal.SIGINT, signal.default_int_handler)
         try:
             response = input().strip().lower()
@@ -339,7 +332,7 @@ class ConnectBothHandler(CommandHandler):
         self.state.prompt = "2FA code: "
         self.tui.show_cursor()
         self.tui.display(self.state)
-        self.tui.position_input(self.state.prompt, self._has_bandwidth())
+        self.tui.position_input(self.state.prompt)
         old_handler = signal.signal(signal.SIGINT, signal.default_int_handler)
         try:
             code = input().strip()

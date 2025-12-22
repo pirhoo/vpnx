@@ -207,15 +207,15 @@ class TestTUI(unittest.TestCase):
         self.tui = TUI()
 
     def test_log_box_heights_positive(self):
-        ext_h, int_h = self.tui._log_box_heights(24, self.tui.STATUS_HEIGHT_BASE)
+        ext_h, int_h = self.tui._log_box_heights(24, self.tui.STATUS_HEIGHT)
         self.assertGreater(ext_h, 0)
         self.assertGreater(int_h, 0)
 
     def test_log_box_heights_fills_screen(self):
         """Box heights should fill the entire terminal height."""
         for h in [20, 21, 24, 25, 30, 31]:
-            ext_h, int_h = self.tui._log_box_heights(h, self.tui.STATUS_HEIGHT_BASE)
-            total = self.tui.STATUS_HEIGHT_BASE + ext_h + int_h
+            ext_h, int_h = self.tui._log_box_heights(h, self.tui.STATUS_HEIGHT)
+            total = self.tui.STATUS_HEIGHT + ext_h + int_h
             self.assertEqual(total, h, f"Failed for height {h}")
 
     def test_render_box_structure(self):
@@ -402,6 +402,18 @@ class TestBandwidthLine(unittest.TestCase):
         result = self.bw.format(stats, "EXT")
         self.assertIn("MB", result)
 
+    def test_format_with_status_connected(self):
+        stats = BandwidthStats()
+        result = self.bw.format_with_status(stats, "EXT", Status.CONNECTED)
+        self.assertIn("EXT", result)
+        self.assertIn("●", result)
+        self.assertIn("↓", result)
+
+    def test_format_with_status_connecting(self):
+        stats = BandwidthStats()
+        result = self.bw.format_with_status(stats, "EXT", Status.CONNECTING, 0)
+        self.assertIn(SPINNER[0], result)
+
 
 class TestTUIBandwidth(unittest.TestCase):
     """Tests for bandwidth display in TUI."""
@@ -418,15 +430,6 @@ class TestTUIBandwidth(unittest.TestCase):
         state.ext_bandwidth.total_in = 1000
         self.assertTrue(self.tui._has_bandwidth(state))
 
-    def test_status_height_without_bandwidth(self):
-        state = VPNState()
-        self.assertEqual(self.tui._status_height(state), self.tui.STATUS_HEIGHT_BASE)
-
-    def test_status_height_with_bandwidth(self):
-        state = VPNState()
-        state.ext_bandwidth.total_in = 1000
-        self.assertEqual(self.tui._status_height(state), self.tui.STATUS_HEIGHT_WITH_BW)
-
     def test_render_without_bandwidth(self):
         state = VPNState()
         result = self.tui.render(state, 60, 20)
@@ -439,6 +442,13 @@ class TestTUIBandwidth(unittest.TestCase):
         result = self.tui.render(state, 80, 20)
         self.assertIn("↓", result)
         self.assertIn("↑", result)
+
+    def test_render_with_bandwidth_shows_status_icon(self):
+        state = VPNState()
+        state.ext_bandwidth.total_in = 1000
+        state.ext_status = Status.CONNECTED
+        result = self.tui.render(state, 80, 20)
+        self.assertIn("●", result)
 
 
 if __name__ == "__main__":
