@@ -34,12 +34,12 @@ class Display(Protocol):
 class TUIRenderer(Protocol):
     """Protocol for TUI rendering."""
 
-    def display(self, state: VPNState) -> None: ...
+    def display(self, state: VPNState, vpn_name: str = None) -> None: ...
     def setup(self) -> None: ...
     def cleanup(self) -> None: ...
     def show_cursor(self) -> None: ...
     def hide_cursor(self) -> None: ...
-    def position_input(self, prompt: str) -> None: ...
+    def position_input(self, prompt: str, vpn_name: str = None) -> None: ...
 
 
 class CommandHandler(ABC):
@@ -126,38 +126,146 @@ class ListHandler(CommandHandler):
 
 
 class ConnectHandler(CommandHandler):
-    """Handle single VPN connection."""
+    """Handle single VPN connection with TUI."""
+
+    # Map management states to domain status
+    STATE_MAP = {
+        ManagementState.CONNECTING: Status.CONNECTING,
+        ManagementState.WAIT: Status.CONNECTING,
+        ManagementState.AUTH: Status.CONNECTING,
+        ManagementState.GET_CONFIG: Status.CONNECTING,
+        ManagementState.ASSIGN_IP: Status.CONNECTING,
+        ManagementState.ADD_ROUTES: Status.CONNECTING,
+        ManagementState.CONNECTED: Status.CONNECTED,
+        ManagementState.RECONNECTING: Status.CONNECTING,
+        ManagementState.EXITING: Status.DISCONNECTED,
+        ManagementState.RESOLVE: Status.CONNECTING,
+        ManagementState.TCP_CONNECT: Status.CONNECTING,
+    }
 
     def __init__(
         self,
         service: VPNService,
         store: CredentialStore,
         username: str,
-        base_path: Path,
+        tui: TUIRenderer,
         display: Display,
+        config_dir: Path,
     ):
         self.service = service
         self.store = store
         self.username = username
-        self.base_path = base_path
+        self.tui = tui
         self.display = display
+        self.config_dir = config_dir
+        self.state = VPNState()
+        self.log_path: Optional[Path] = None
+        self.management_port: Optional[int] = None
+        self.management_client: Optional[ManagementClient] = None
+        self.last_bytecount_time: float = 0
+        self.running = True
+        self.success = False
 
     def handle(self, command: ConnectCommand) -> bool:
         if not self.service.validate_vpn(command.vpn_type):
             self.display.error(f"Error: Unknown VPN: {command.vpn_type}")
             return False
 
-        code = self.display.input("2FA code: ").strip()
-        if not code:
-            self.display.error("Error: 2FA code required")
-            return False
+        self.vpn_type = command.vpn_type
+        self._setup_signals()
+        self._start_sudo_refresh()
+        self.tui.setup()
 
-        credentials = self._get_credentials(code)
-        if not credentials:
-            self.display.error("Error: Could not get credentials")
-            return False
+        try:
+            self.log_path = Path(f"/tmp/{self.vpn_type.log_prefix}-{os.getpid()}.log")
+            self.state.set_log(self.vpn_type, str(self.log_path))
 
-        return self._run_vpn(command.vpn_type, credentials)
+            if not self._connect_vpn():
+                return False
+
+            self.success = True
+            self._monitor_loop()
+            return True
+        finally:
+            self._cleanup()
+
+    def _connect_vpn(self) -> bool:
+        # Check/setup management interface
+        self._setup_management()
+
+        while self.running:
+            self.state.set_status(self.vpn_type, Status.WAITING)
+            code = self._prompt_2fa()
+            if not code:
+                return False
+
+            credentials = self._get_credentials(code)
+            if not credentials:
+                return False
+
+            self.service.connect(
+                self.vpn_type, credentials, self.log_path, self.management_port
+            )
+            result = self._wait_for_connection()
+
+            if result == ConnectionResult.CONNECTED:
+                self.state.set_status(self.vpn_type, Status.CONNECTED)
+                return True
+
+            self._reset_vpn()
+        return False
+
+    def _setup_management(self) -> None:
+        """Check for management directive and prompt user if missing."""
+        config_path = self.config_dir / self.vpn_type.config_filename
+        parser = OpenVPNConfigParser(config_path)
+
+        if parser.has_management_directive():
+            config = parser.get_management_config()
+            self.management_port = config.port
+            return
+
+        if self._prompt_management_setup():
+            port = PortAllocator.allocate()
+            parser.append_management_directive("127.0.0.1", port)
+            self.management_port = port
+
+    def _prompt_management_setup(self) -> bool:
+        """Prompt user to enable management interface."""
+        self.state.prompt = "Management interface not found. Enable it? [Y/n]: "
+        self.tui.show_cursor()
+        self.tui.display(self.state, self.vpn_type.name)
+        self.tui.position_input(self.state.prompt, self.vpn_type.name)
+        old_handler = signal.signal(signal.SIGINT, signal.default_int_handler)
+        try:
+            response = input().strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            self.running = False
+            print(flush=True)
+            response = "n"
+        finally:
+            signal.signal(signal.SIGINT, old_handler)
+        self.tui.hide_cursor()
+        self.state.prompt = ""
+        return response != "n"
+
+    def _prompt_2fa(self) -> str:
+        self.state.prompt = "2FA code: "
+        self.tui.show_cursor()
+        self.tui.display(self.state, self.vpn_type.name)
+        self.tui.position_input(self.state.prompt, self.vpn_type.name)
+        old_handler = signal.signal(signal.SIGINT, signal.default_int_handler)
+        try:
+            code = input().strip()
+        except (KeyboardInterrupt, EOFError):
+            self.running = False
+            print(flush=True)
+            code = ""
+        finally:
+            signal.signal(signal.SIGINT, old_handler)
+        self.tui.hide_cursor()
+        self.state.prompt = ""
+        return code
 
     def _get_credentials(self, otp: str) -> Optional[Credentials]:
         password = self.store.get_password(self.username)
@@ -165,34 +273,131 @@ class ConnectHandler(CommandHandler):
             return None
         return Credentials(self.username, password, otp)
 
-    def _run_vpn(self, vpn_type: VPNType, credentials: Credentials) -> bool:
-        import subprocess
+    def _wait_for_connection(self) -> ConnectionResult:
+        if self.management_port:
+            return self._wait_via_management()
+        return self._wait_via_log()
 
-        auth_file = Path(f"/tmp/vpn-auth-{os.getpid()}")
-        auth_file.write_text(credentials.auth_string)
+    def _wait_via_log(self) -> ConnectionResult:
+        """Wait for connection using log file polling."""
 
-        cmd = [
-            "sudo",
-            "openvpn",
-            "--config",
-            str(self.base_path / "certificates" / vpn_type.config_filename),
-        ]
-        if self.service.needs_up_script(vpn_type):
-            cmd.extend(
-                [
-                    "--script-security",
-                    "2",
-                    "--up",
-                    str(self.base_path / "scripts" / "up.sh"),
-                ]
-            )
-        cmd.extend(["--auth-user-pass", str(auth_file)])
+        def tick():
+            self.state.set_status(self.vpn_type, Status.CONNECTING)
+            self.state.advance_spinner()
+            self.tui.display(self.state, self.vpn_type.name)
 
-        try:
-            subprocess.run(cmd)
-            return True
-        finally:
-            auth_file.unlink(missing_ok=True)
+        return self.service.wait_for_connection(self.vpn_type, self.log_path, tick)
+
+    def _wait_via_management(self) -> ConnectionResult:
+        """Wait for connection using management interface."""
+        client = ManagementClient(port=self.management_port)
+
+        if not client.connect():
+            return self._wait_via_log()
+
+        self.management_client = client
+        self.last_bytecount_time = time.time()
+        client.send_command("state on")
+        client.send_command("bytecount 5")
+
+        timeout = 60
+        for _ in range(int(timeout / 0.1)):
+            self.state.set_status(self.vpn_type, Status.CONNECTING)
+            self.state.advance_spinner()
+            self._update_bandwidth(client)
+            self.tui.display(self.state, self.vpn_type.name)
+
+            events = client.read_events()
+            for event in events:
+                status = self.STATE_MAP.get(event.state)
+                if status:
+                    self.state.set_status(self.vpn_type, status)
+                if event.state == ManagementState.CONNECTED:
+                    return ConnectionResult.CONNECTED
+                if event.state == ManagementState.EXITING:
+                    return ConnectionResult.PROCESS_DIED
+
+            if not self.service.is_connected(self.vpn_type):
+                time.sleep(0.5)
+                return ConnectionResult.PROCESS_DIED
+
+            time.sleep(0.1)
+
+        return ConnectionResult.TIMEOUT
+
+    def _update_bandwidth(self, client: ManagementClient) -> None:
+        """Update bandwidth stats from management client."""
+        bytecount = client.get_bytecount()
+        if bytecount:
+            stats = self.state.get_bandwidth(self.vpn_type)
+            if (
+                bytecount.bytes_in != stats.total_in
+                or bytecount.bytes_out != stats.total_out
+            ):
+                now = time.time()
+                interval = now - self.last_bytecount_time
+                self.last_bytecount_time = now
+                stats.update(bytecount.bytes_in, bytecount.bytes_out, interval)
+
+    def _reset_vpn(self) -> None:
+        self.state.set_status(self.vpn_type, Status.DISCONNECTED)
+        self.service.disconnect(self.vpn_type)
+
+    def _monitor_loop(self) -> None:
+        check_interval = 20
+        iteration = 0
+
+        while self.running:
+            if self.management_client:
+                self.management_client.read_events()
+                self._update_bandwidth(self.management_client)
+
+            self.tui.display(self.state, self.vpn_type.name)
+            time.sleep(0.1)
+            iteration += 1
+
+            if iteration < check_interval:
+                continue
+            iteration = 0
+
+            if not self.service.is_connected(self.vpn_type) or self.service.has_errors(
+                self.log_path
+            ):
+                self._reset_vpn()
+                if not self._connect_vpn():
+                    self.success = False
+                    break
+
+    def _setup_signals(self) -> None:
+        def handler(*_):
+            self.running = False
+
+        signal.signal(signal.SIGINT, handler)
+        signal.signal(signal.SIGTERM, handler)
+
+    def _start_sudo_refresh(self) -> None:
+        def refresh():
+            runner = CommandRunner()
+            while self.running:
+                runner.run_sudo(["-v"])
+                time.sleep(50)
+
+        threading.Thread(target=refresh, daemon=True).start()
+
+    def _cleanup(self) -> None:
+        self.tui.cleanup()
+
+        if self.management_client:
+            self.management_client.disconnect()
+            self.management_client = None
+
+        if self.management_port:
+            PortAllocator.release(self.management_port)
+            self.management_port = None
+
+        self.service.disconnect(self.vpn_type)
+        if self.success and self.log_path:
+            self.service.cleanup(self.log_path)
 
 
 class ConnectBothHandler(CommandHandler):
