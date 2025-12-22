@@ -1,7 +1,7 @@
 """CLI argument parsing and routing."""
 
 import argparse
-from typing import Optional
+from typing import List, Optional
 
 from domain.value_objects import VPNType
 from application.commands import (
@@ -9,32 +9,35 @@ from application.commands import (
     SetupCommand,
     ListCommand,
     ConnectCommand,
-    ConnectBothCommand,
+    ConnectAllCommand,
 )
+from infrastructure.app_config import AppConfig
 
 
-VERSION = "1.0.0"
+VERSION = "2.0.0"
 
 
 class CLI:
     """Command line interface parser."""
 
-    def __init__(self):
+    def __init__(self, config: Optional[AppConfig] = None):
+        self.config = config
         self.parser = self._build_parser()
 
     def _build_parser(self) -> argparse.ArgumentParser:
-        parser = argparse.ArgumentParser(prog="vpn", description="ICIJ VPN client")
+        parser = argparse.ArgumentParser(prog="vpn", description="VPN client")
         parser.add_argument("-v", "--version", action="version", version=VERSION)
 
         sub = parser.add_subparsers(dest="cmd")
-        sub.add_parser("setup", help="Configure credentials")
-        sub.add_parser("list", help="List available VPNs")
-        sub.add_parser("ext", help="Connect to EXT VPN")
-        sub.add_parser("int", help="Connect to INT VPN")
-        sub.add_parser("both", help="Connect to both VPNs (fullscreen)")
+        sub.add_parser("setup", help="Configure VPN client")
+        sub.add_parser("list", help="List configured VPNs")
 
-        connect = sub.add_parser("connect", help="Connect to specific VPN")
-        connect.add_argument("vpn", help="VPN name")
+        # Connect to single VPN by name
+        connect = sub.add_parser("connect", help="Connect to a VPN")
+        connect.add_argument("vpn", help="VPN name (e.g., ext, int, prod)")
+
+        # Connect to all configured VPNs
+        sub.add_parser("all", help="Connect to all VPNs in sequence")
 
         return parser
 
@@ -54,12 +57,15 @@ class CLI:
             return SetupCommand()
         if parsed.cmd == "list":
             return ListCommand()
-        if parsed.cmd == "both":
-            return ConnectBothCommand()
-        if parsed.cmd == "ext":
-            return ConnectCommand(VPNType("EXT"))
-        if parsed.cmd == "int":
-            return ConnectCommand(VPNType("INT"))
+        if parsed.cmd == "all":
+            vpn_types = self._get_all_vpn_types()
+            return ConnectAllCommand(vpn_types)
         if parsed.cmd == "connect":
             return ConnectCommand(VPNType(parsed.vpn))
         return None
+
+    def _get_all_vpn_types(self) -> List[VPNType]:
+        """Get list of all VPN types from config."""
+        if self.config:
+            return [VPNType(v.name) for v in self.config.vpns]
+        return []

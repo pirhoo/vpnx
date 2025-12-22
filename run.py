@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""ICIJ VPN Client - Composition Root."""
+"""VPN Client - Composition Root."""
 
 import subprocess
 import sys
 from pathlib import Path
+from typing import Optional
 
 # Add lib to path
 sys.path.insert(0, str(Path(__file__).parent / "lib"))
@@ -15,13 +16,19 @@ from infrastructure import (
     OpenVPNProcessManager,
     PassPasswordStore,
 )
+from infrastructure.xdg import XDGPaths
+from infrastructure.app_config import AppConfig
 from presentation import CLI, TUI, ConsoleDisplay
-from application import SetupCommand, ListCommand, ConnectCommand, ConnectBothCommand
+from application import (
+    SetupCommand,
+    ListCommand,
+    ConnectCommand,
+    ConnectAllCommand,
+)
 from application.handlers import (
     SetupHandler,
-    ListHandler,
     ConnectHandler,
-    ConnectBothHandler,
+    ConnectAllHandler,
 )
 
 
@@ -30,34 +37,65 @@ class Application:
 
     REQUIRED_COMMANDS = ["openvpn", "pass", "gpg"]
 
-    def __init__(self, base_path: Path):
-        self.base_path = base_path
+    def __init__(self):
         self.runner = CommandRunner()
         self.display = ConsoleDisplay()
 
-        # Infrastructure
-        self.repository = FileVPNRepository(base_path / "certificates")
-        self.process_manager = OpenVPNProcessManager(
-            self.runner, base_path / "certificates", base_path / "scripts" / "up.sh"
-        )
-        self.store = PassPasswordStore(base_path / "credentials")
+        # XDG paths
+        self.xdg = XDGPaths.default()
 
-        # Domain service
-        self.vpn_service = VPNService(self.repository, self.process_manager)
+        # Load config if exists
+        self.config: Optional[AppConfig] = None
+        if self.xdg.config_file.exists():
+            try:
+                self.config = AppConfig.load(self.xdg.config_file)
+            except Exception as e:
+                self.display.error(f"Error loading config: {e}")
+
+        # Initialize services if config exists
+        self.store: Optional[PassPasswordStore] = None
+        self.vpn_service: Optional[VPNService] = None
+
+        if self.config:
+            self._init_services()
 
         # Presentation
-        self.cli = CLI()
+        self.cli = CLI(self.config)
         self.tui = TUI()
 
-    def _load_username(self) -> str:
-        f = self.base_path / ".username"
-        if f.exists():
-            return f.read_text().strip()
-        import os
+    def _init_services(self) -> None:
+        """Initialize services from loaded config."""
+        # Build config_paths mapping from VPN configs
+        config_paths = {vpn.name: vpn.config_path for vpn in self.config.vpns}
 
-        return os.environ.get("ICIJ_USERNAME", "")
+        # Get VPNs that need up script
+        up_script_vpns = [v.name for v in self.config.vpns if v.needs_up_script]
+
+        # Determine up_script path (config > project default > XDG default)
+        project_root = Path(__file__).parent
+        default_up_script = project_root / "scripts" / "up.sh"
+        up_script = self.config.up_script or (
+            default_up_script if default_up_script.exists() else self.xdg.up_script
+        )
+        if up_script and not up_script.exists():
+            up_script = None
+
+        # Infrastructure with config_paths
+        self.repository = FileVPNRepository(config_paths=config_paths)
+        self.process_manager = OpenVPNProcessManager(
+            self.runner, up_script=up_script, config_paths=config_paths
+        )
+
+        # Password store (might not be initialized)
+        self.store = PassPasswordStore(self.config.credentials_dir)
+
+        # Domain service
+        self.vpn_service = VPNService(
+            self.repository, self.process_manager, up_script_vpns
+        )
 
     def check_dependencies(self) -> bool:
+        """Check if required commands are available."""
         missing = [c for c in self.REQUIRED_COMMANDS if not self.runner.exists(c)]
         if missing:
             self.display.error(f"Error: Missing: {', '.join(missing)}")
@@ -65,15 +103,17 @@ class Application:
         return True
 
     def check_setup(self) -> bool:
-        if not self._load_username():
-            self.display.error("Error: Run 'setup' first")
+        """Check if setup has been completed."""
+        if not self.config:
+            self.display.error("No configuration found. Run 'vpn setup' first.")
             return False
-        if not self.store.is_initialized():
-            self.display.error("Error: Password store not initialized")
+        if not self.config.vpns:
+            self.display.error("No VPNs configured. Run 'vpn setup' to add VPNs.")
             return False
         return True
 
     def check_vpn_running(self) -> bool:
+        """Check if OpenVPN is already running."""
         result = self.runner.run_sudo(["pgrep", "openvpn"])
         if not result.success:
             return True
@@ -87,26 +127,55 @@ class Application:
             return True
         return False
 
+    def _get_username(self) -> str:
+        """Get username from config or prompt."""
+        if self.config and self.config.username:
+            return self.config.username
+        return self.display.input("Username: ").strip()
+
+    def _get_credentials(self, username: str) -> Optional[str]:
+        """Get password from store or prompt."""
+        if self.store and self.store.is_initialized():
+            password = self.store.get_password(username)
+            if password:
+                return password
+
+        # Prompt for password
+        import getpass
+
+        return getpass.getpass("Password: ")
+
     def run(self, args: list = None) -> int:
+        """Run the application."""
         command = self.cli.parse(args)
         if command is None:
             return 0
 
-        # Setup doesn't need dependencies
+        # Setup doesn't need dependencies or config
         if isinstance(command, SetupCommand):
-            handler = SetupHandler(
-                self.store, self.runner, self.base_path, self.display
-            )
-            return 0 if handler.handle(command) else 1
+            handler = SetupHandler(self.xdg, self.runner, self.display, self.store)
+            result = handler.handle(command)
+            # Reload config after setup
+            if result and self.xdg.config_file.exists():
+                self.config = AppConfig.load(self.xdg.config_file)
+                self._init_services()
+            return 0 if result else 1
 
         # Check dependencies for all other commands
         if not self.check_dependencies():
             return 1
 
-        # List doesn't need setup
+        # List shows configured VPNs
         if isinstance(command, ListCommand):
-            handler = ListHandler(self.vpn_service, self.display)
-            return 0 if handler.handle(command) else 1
+            if not self.config or not self.config.vpns:
+                self.display.print("No VPNs configured. Run 'vpn setup' to add VPNs.")
+                return 0
+            self.display.print("Configured VPNs:")
+            for vpn in self.config.vpns:
+                self.display.print(
+                    f"  {vpn.name} - {vpn.display_name} ({vpn.config_path})"
+                )
+            return 0
 
         # Connection commands need setup
         if not self.check_setup():
@@ -117,27 +186,45 @@ class Application:
         if not self.check_vpn_running():
             return 0
 
-        username = self._load_username()
+        username = self._get_username()
+        if not username:
+            self.display.error("Username is required")
+            return 1
 
         if isinstance(command, ConnectCommand):
+            # Get config_dir from VPN config for management interface setup
+            vpn_config = self.config.get_vpn(command.vpn_type.name)
+            if not vpn_config:
+                self.display.error(f"Unknown VPN: {command.vpn_type.name}")
+                return 1
+            config_dir = vpn_config.config_path.parent
+
             handler = ConnectHandler(
                 self.vpn_service,
                 self.store,
                 username,
                 self.tui,
                 self.display,
-                self.base_path / "certificates",
+                config_dir,
             )
             return 0 if handler.handle(command) else 1
 
-        if isinstance(command, ConnectBothCommand):
-            handler = ConnectBothHandler(
+        if isinstance(command, ConnectAllCommand):
+            # Build config paths mapping for each VPN
+            config_paths = {}
+            for vpn_type in command.vpn_types:
+                vpn_config = self.config.get_vpn(vpn_type.name)
+                if vpn_config:
+                    config_paths[vpn_type.name] = vpn_config.config_path
+
+            handler = ConnectAllHandler(
                 self.vpn_service,
                 self.store,
                 username,
                 self.tui,
                 self.display,
-                self.base_path / "certificates",
+                config_paths,
+                command.vpn_types,
             )
             return 0 if handler.handle(command) else 1
 
@@ -145,8 +232,7 @@ class Application:
 
 
 def main():
-    base_path = Path(__file__).parent.resolve()
-    app = Application(base_path)
+    app = Application()
     sys.exit(app.run())
 
 
