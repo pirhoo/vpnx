@@ -269,6 +269,24 @@ class TestBandwidthStats(unittest.TestCase):
         stats.update(3000, 1500, 60.0)  # Second history point
         self.assertEqual(len(stats.history_in), 2)
 
+    def test_rate_preserved_when_bytes_unchanged(self):
+        stats = BandwidthStats()
+        stats.update(1000, 500, 1.0)
+        stats.update(2000, 1000, 5.0)  # Rate = 200 B/s
+        self.assertEqual(stats.rate_in, 200.0)
+        # Same bytes, different interval - rate should be preserved
+        stats.update(2000, 1000, 1.0)
+        self.assertEqual(stats.rate_in, 200.0)  # Still 200, not 0
+
+    def test_no_update_when_bytes_unchanged(self):
+        stats = BandwidthStats()
+        stats.update(1000, 500, 1.0)
+        stats.update(2000, 1000, 60.0)
+        self.assertEqual(len(stats.history_in), 1)
+        # Same bytes - should not add to history
+        stats.update(2000, 1000, 60.0)
+        self.assertEqual(len(stats.history_in), 1)  # Still 1
+
 
 if __name__ == "__main__":
     unittest.main()

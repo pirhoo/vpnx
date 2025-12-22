@@ -28,8 +28,12 @@ class BandwidthStats:
 
     def update(self, bytes_in: int, bytes_out: int, interval: float) -> None:
         """Update stats with new bytecount data."""
+        # Only update rate when bytes actually change (OpenVPN sends updates every ~5s)
+        if bytes_in == self.total_in and bytes_out == self.total_out:
+            return  # No change, keep previous rate
+
         if interval > 0 and self.total_in > 0:
-            # Calculate instantaneous rate from delta
+            # Calculate rate from delta
             delta_in = bytes_in - self.total_in
             delta_out = bytes_out - self.total_out
             self.rate_in = delta_in / interval
