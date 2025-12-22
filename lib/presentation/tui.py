@@ -377,12 +377,63 @@ class TUI:
 
         return self.term.home() + (clr + "\n").join(lines) + clr
 
-    def display(self, state: VPNState) -> None:
-        self.term.write(self.render(state))
+    def render_single(
+        self, state: VPNState, vpn_name: str, w: int = None, h: int = None
+    ) -> str:
+        """Render TUI for a single VPN connection."""
+        w, h = w or self.term.width, h or self.term.height
+        status_h = 4  # top + content + prompt + bottom (no separator needed)
+        log_h = h - status_h
+        log_lines_n = log_h - 2
+        clr = self.term.clear_line()
+
+        # Get the appropriate status/bandwidth/log for this VPN
+        if vpn_name == "EXT":
+            vpn_status = state.ext_status
+            vpn_bandwidth = state.ext_bandwidth
+            vpn_log = state.ext_log
+        else:
+            vpn_status = state.int_status
+            vpn_bandwidth = state.int_bandwidth
+            vpn_log = state.int_log
+
+        has_bw = vpn_bandwidth.total_in > 0
+
+        lines = []
+        lines.append(self.box.top("Status", w))
+
+        # Status/bandwidth line
+        content_width = w - 4
+        if has_bw:
+            cell = self.bandwidth.format_with_status(
+                vpn_bandwidth, vpn_name, vpn_status, state.spinner_frame, content_width
+            )
+        else:
+            cell = self.status.format(vpn_name, vpn_status, state.spinner_frame)
+
+        lines.append(self.box.line(cell, w))
+
+        hint = f"{self.term.color('dim')}Ctrl+C to disconnect{self.term.reset()}"
+        lines.append(self.box.line(state.prompt if state.prompt else hint, w))
+        lines.append(self.box.bottom(w))
+
+        log_lines = self.log_reader.read_tail(vpn_log, log_lines_n)
+        lines.extend(self._render_box(f"{vpn_name} Log", log_lines, log_lines_n, w))
+
+        return self.term.home() + (clr + "\n").join(lines) + clr
+
+    def display(self, state: VPNState, vpn_name: str = None) -> None:
+        if vpn_name:
+            self.term.write(self.render_single(state, vpn_name))
+        else:
+            self.term.write(self.render(state))
         self.term.flush()
 
-    def position_input(self, prompt: str) -> None:
-        self.term.move_to(4, 3 + len(prompt))  # Row 4: after top, content, separator
+    def position_input(self, prompt: str, vpn_name: str = None) -> None:
+        # Row 4 for both mode (top, cells, separator, prompt)
+        # Row 3 for single mode (top, content, prompt)
+        row = 3 if vpn_name else 4
+        self.term.move_to(row, 3 + len(prompt))
         self.term.flush()
 
     def setup(self) -> None:
