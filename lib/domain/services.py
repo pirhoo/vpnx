@@ -33,6 +33,7 @@ class ProcessManager(ABC):
         credentials: Credentials,
         log_path: Path,
         use_up_script: bool,
+        management_port: Optional[int] = None,
     ) -> None:
         """Start VPN connection."""
 
@@ -97,11 +98,19 @@ class VPNService:
         return vpn_type.name in self.UP_SCRIPT_VPNS
 
     def connect(
-        self, vpn_type: VPNType, credentials: Credentials, log_path: Path
+        self,
+        vpn_type: VPNType,
+        credentials: Credentials,
+        log_path: Path,
+        management_port: Optional[int] = None,
     ) -> None:
         """Start VPN connection."""
         self.process_manager.start(
-            vpn_type, credentials, log_path, self.needs_up_script(vpn_type)
+            vpn_type,
+            credentials,
+            log_path,
+            self.needs_up_script(vpn_type),
+            management_port,
         )
 
     def disconnect(self, vpn_type: VPNType) -> None:
