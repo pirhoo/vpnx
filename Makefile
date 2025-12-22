@@ -1,20 +1,24 @@
-.PHONY: help test lint format clean install setup list all
+.PHONY: help test lint format clean install setup list all connect
 
 PYTHON := python3
 SRC := $(shell find lib -name "*.py") run.py
 TESTS := $(shell find tests -name "test_*.py")
 
 help:
-	@echo "VPN Client - Available targets:"
-	@echo "  make test     Run unit tests"
-	@echo "  make lint     Check code style"
-	@echo "  make clean    Remove cache files"
-	@echo "  make install  Install dependencies (none required)"
+	@echo "vpnx - VPN Client"
 	@echo ""
-	@echo "VPN Commands:"
-	@echo "  make setup    Configure VPN client"
-	@echo "  make list     List configured VPNs"
-	@echo "  make all      Connect to all configured VPNs"
+	@echo "Usage:"
+	@echo "  make setup          Configure VPN client (interactive wizard)"
+	@echo "  make list           List configured VPNs"
+	@echo "  make all            Connect to all configured VPNs"
+	@echo "  make connect VPN=x  Connect to a specific VPN"
+	@echo ""
+	@echo "Development:"
+	@echo "  make test           Run unit tests"
+	@echo "  make lint           Check code style"
+	@echo "  make format         Auto-format code"
+	@echo "  make clean          Remove cache files"
+	@echo "  make install        Show system dependencies"
 
 test:
 	@cd lib && $(PYTHON) -m unittest discover -s ../tests -v
@@ -51,3 +55,11 @@ list:
 
 all:
 	@$(PYTHON) run.py all
+
+connect:
+ifndef VPN
+	@echo "Usage: make connect VPN=<name>"
+	@echo "Run 'make list' to see configured VPNs"
+else
+	@$(PYTHON) run.py connect $(VPN)
+endif
