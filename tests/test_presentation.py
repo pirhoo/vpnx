@@ -9,9 +9,19 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
 
 os.environ["NO_COLOR"] = "1"
 
-from domain import VPNState, Status
+from domain import VPNState, Status, BandwidthStats
 from presentation.terminal import Terminal, strip_ansi, visible_len
-from presentation.tui import TUI, Box, StatusLine, SPINNER, STATUS_CONFIG
+from presentation.tui import (
+    TUI,
+    Box,
+    StatusLine,
+    Sparkline,
+    BandwidthLine,
+    SPINNER,
+    STATUS_CONFIG,
+    format_bytes,
+    format_rate,
+)
 from presentation.cli import CLI
 from application.commands import (
     SetupCommand,
@@ -197,15 +207,15 @@ class TestTUI(unittest.TestCase):
         self.tui = TUI()
 
     def test_log_box_heights_positive(self):
-        ext_h, int_h = self.tui._log_box_heights(24)
+        ext_h, int_h = self.tui._log_box_heights(24, self.tui.STATUS_HEIGHT_BASE)
         self.assertGreater(ext_h, 0)
         self.assertGreater(int_h, 0)
 
     def test_log_box_heights_fills_screen(self):
         """Box heights should fill the entire terminal height."""
         for h in [20, 21, 24, 25, 30, 31]:
-            ext_h, int_h = self.tui._log_box_heights(h)
-            total = self.tui.STATUS_HEIGHT + ext_h + int_h
+            ext_h, int_h = self.tui._log_box_heights(h, self.tui.STATUS_HEIGHT_BASE)
+            total = self.tui.STATUS_HEIGHT_BASE + ext_h + int_h
             self.assertEqual(total, h, f"Failed for height {h}")
 
     def test_render_box_structure(self):
@@ -295,6 +305,140 @@ class TestCLI(unittest.TestCase):
         cmd = self.cli.parse([])
         sys.stdout = old_stdout
         self.assertIsNone(cmd)
+
+
+class TestFormatBytes(unittest.TestCase):
+    """Tests for format_bytes function."""
+
+    def test_bytes(self):
+        self.assertEqual(format_bytes(0), "0 B")
+        self.assertEqual(format_bytes(512), "512 B")
+        self.assertEqual(format_bytes(1023), "1023 B")
+
+    def test_kilobytes(self):
+        self.assertEqual(format_bytes(1024), "1.0 KB")
+        self.assertEqual(format_bytes(1536), "1.5 KB")
+        self.assertEqual(format_bytes(10240), "10.0 KB")
+
+    def test_megabytes(self):
+        self.assertEqual(format_bytes(1024 * 1024), "1.0 MB")
+        self.assertEqual(format_bytes(1024 * 1024 * 5.5), "5.5 MB")
+
+    def test_gigabytes(self):
+        self.assertEqual(format_bytes(1024 * 1024 * 1024), "1.0 GB")
+        self.assertEqual(format_bytes(1024 * 1024 * 1024 * 2.5), "2.5 GB")
+
+
+class TestFormatRate(unittest.TestCase):
+    """Tests for format_rate function."""
+
+    def test_rate_suffix(self):
+        self.assertEqual(format_rate(100), "100 B/s")
+        self.assertEqual(format_rate(1024), "1.0 KB/s")
+        self.assertEqual(format_rate(1024 * 1024), "1.0 MB/s")
+
+
+class TestSparkline(unittest.TestCase):
+    """Tests for Sparkline class."""
+
+    def setUp(self):
+        self.term = Terminal()
+        self.spark = Sparkline(self.term)
+
+    def test_empty_values(self):
+        result = self.spark.render([], 5)
+        self.assertEqual(result, "     ")
+
+    def test_single_value(self):
+        result = self.spark.render([100], 5)
+        self.assertEqual(len(result), 5)
+
+    def test_values_less_than_width(self):
+        result = self.spark.render([10, 20, 30], 5)
+        self.assertEqual(len(result), 5)
+
+    def test_values_more_than_width(self):
+        result = self.spark.render([10, 20, 30, 40, 50, 60, 70], 5)
+        self.assertEqual(len(result), 5)
+
+    def test_all_zeros(self):
+        result = self.spark.render([0, 0, 0], 3)
+        self.assertEqual(len(result), 3)
+
+    def test_uses_sparkline_chars(self):
+        result = self.spark.render([0, 50, 100], 3)
+        for char in result:
+            self.assertIn(char, "▁▂▃▄▅▆▇█")
+
+
+class TestBandwidthLine(unittest.TestCase):
+    """Tests for BandwidthLine class."""
+
+    def setUp(self):
+        self.term = Terminal()
+        self.bw = BandwidthLine(self.term)
+
+    def test_format_contains_label(self):
+        stats = BandwidthStats()
+        result = self.bw.format(stats, "EXT")
+        self.assertIn("EXT", result)
+
+    def test_format_contains_arrows(self):
+        stats = BandwidthStats()
+        result = self.bw.format(stats, "EXT")
+        self.assertIn("↓", result)
+        self.assertIn("↑", result)
+
+    def test_format_shows_rate(self):
+        stats = BandwidthStats()
+        stats.update(1000, 500, 1.0)
+        stats.update(2024, 1024, 1.0)
+        result = self.bw.format(stats, "EXT")
+        self.assertIn("/s", result)
+
+    def test_format_shows_total(self):
+        stats = BandwidthStats()
+        stats.update(1024 * 1024, 512 * 1024, 1.0)
+        result = self.bw.format(stats, "EXT")
+        self.assertIn("MB", result)
+
+
+class TestTUIBandwidth(unittest.TestCase):
+    """Tests for bandwidth display in TUI."""
+
+    def setUp(self):
+        self.tui = TUI()
+
+    def test_has_bandwidth_false_initially(self):
+        state = VPNState()
+        self.assertFalse(self.tui._has_bandwidth(state))
+
+    def test_has_bandwidth_true_with_data(self):
+        state = VPNState()
+        state.ext_bandwidth.total_in = 1000
+        self.assertTrue(self.tui._has_bandwidth(state))
+
+    def test_status_height_without_bandwidth(self):
+        state = VPNState()
+        self.assertEqual(self.tui._status_height(state), self.tui.STATUS_HEIGHT_BASE)
+
+    def test_status_height_with_bandwidth(self):
+        state = VPNState()
+        state.ext_bandwidth.total_in = 1000
+        self.assertEqual(self.tui._status_height(state), self.tui.STATUS_HEIGHT_WITH_BW)
+
+    def test_render_without_bandwidth(self):
+        state = VPNState()
+        result = self.tui.render(state, 60, 20)
+        self.assertNotIn("↓", result)
+
+    def test_render_with_bandwidth(self):
+        state = VPNState()
+        state.ext_bandwidth.total_in = 1000
+        state.int_bandwidth.total_in = 500
+        result = self.tui.render(state, 80, 20)
+        self.assertIn("↓", result)
+        self.assertIn("↑", result)
 
 
 if __name__ == "__main__":
