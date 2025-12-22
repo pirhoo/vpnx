@@ -2,13 +2,14 @@
 
 from typing import List
 
-from domain import VPNState, Status
+from domain import VPNState, Status, BandwidthStats
 from infrastructure.log_reader import LogReader
 from presentation.terminal import Terminal, visible_len
 
 
 BOX = {"tl": "╭", "tr": "╮", "bl": "╰", "br": "╯", "h": "─", "v": "│"}
 SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+SPARKLINE_CHARS = "▁▂▃▄▅▆▇█"
 
 STATUS_CONFIG = {
     Status.DISCONNECTED: ("○", "Disconnected", "red"),
@@ -16,6 +17,99 @@ STATUS_CONFIG = {
     Status.CONNECTING: (None, "Connecting..", "cyan"),
     Status.CONNECTED: ("●", "Connected", "green"),
 }
+
+
+def format_bytes(n: float) -> str:
+    """Format bytes to human readable string."""
+    if n < 1024:
+        return f"{n:.0f} B"
+    elif n < 1024 * 1024:
+        return f"{n / 1024:.1f} KB"
+    elif n < 1024 * 1024 * 1024:
+        return f"{n / (1024 * 1024):.1f} MB"
+    else:
+        return f"{n / (1024 * 1024 * 1024):.1f} GB"
+
+
+def format_rate(n: float) -> str:
+    """Format bytes/sec to human readable string."""
+    return f"{format_bytes(n)}/s"
+
+
+class Sparkline:
+    """Colored sparkline bar chart for bandwidth visualization."""
+
+    def __init__(self, term: Terminal):
+        self.term = term
+
+    def render(self, values: List[float], width: int) -> str:
+        """Render a sparkline from values, fitting to width."""
+        if not values:
+            return " " * width
+
+        # Pad or truncate to fit width
+        if len(values) < width:
+            values = [0.0] * (width - len(values)) + list(values)
+        elif len(values) > width:
+            values = values[-width:]
+
+        max_val = max(values) if values else 1
+        if max_val == 0:
+            max_val = 1
+
+        result = []
+        for v in values:
+            # Normalize to 0-7 range for sparkline chars
+            level = int((v / max_val) * 7)
+            level = min(7, max(0, level))
+            char = SPARKLINE_CHARS[level]
+
+            # Color based on level: green -> yellow -> red
+            if level <= 2:
+                color = self.term.color("green")
+            elif level <= 5:
+                color = self.term.color("yellow")
+            else:
+                color = self.term.color("red")
+
+            if self.term.use_color:
+                result.append(f"{color}{char}{self.term.reset()}")
+            else:
+                result.append(char)
+
+        return "".join(result)
+
+
+class BandwidthLine:
+    """Bandwidth display with sparkline and stats."""
+
+    SPARKLINE_WIDTH = 10
+
+    def __init__(self, term: Terminal):
+        self.term = term
+        self.sparkline = Sparkline(term)
+
+    def format(self, stats: BandwidthStats, label: str) -> str:
+        """Format bandwidth line: LABEL ↓rate ↑rate [sparkline] (total)."""
+        down = format_rate(stats.rate_in)
+        up = format_rate(stats.rate_out)
+        total = format_bytes(stats.total_in + stats.total_out)
+
+        # Combine histories for sparkline (in + out)
+        combined = []
+        for i in range(max(len(stats.history_in), len(stats.history_out))):
+            h_in = stats.history_in[i] if i < len(stats.history_in) else 0
+            h_out = stats.history_out[i] if i < len(stats.history_out) else 0
+            combined.append(h_in + h_out)
+
+        spark = self.sparkline.render(combined, self.SPARKLINE_WIDTH)
+
+        lbl = f"{self.term.color('bold')}{label}{self.term.reset()}"
+        down_c = f"{self.term.color('green')}↓{down:>10}{self.term.reset()}"
+        up_c = f"{self.term.color('cyan')}↑{up:>10}{self.term.reset()}"
+        total_c = f"{self.term.color('dim')}({total}){self.term.reset()}"
+
+        return f"{lbl} {down_c} {up_c} {spark} {total_c}"
 
 
 class Box:
@@ -111,17 +205,27 @@ class StatusLine:
 class TUI:
     """Main TUI renderer."""
 
-    STATUS_HEIGHT = 4
+    STATUS_HEIGHT_BASE = 4
+    STATUS_HEIGHT_WITH_BW = 5
 
     def __init__(self, term: Terminal = None, log_reader: LogReader = None):
         self.term = term or Terminal()
         self.box = Box(self.term)
         self.status = StatusLine(self.term)
+        self.bandwidth = BandwidthLine(self.term)
         self.log_reader = log_reader or LogReader()
 
-    def _log_box_heights(self, height: int) -> tuple:
+    def _has_bandwidth(self, state: VPNState) -> bool:
+        """Check if we have bandwidth data to display."""
+        return state.ext_bandwidth.total_in > 0 or state.int_bandwidth.total_in > 0
+
+    def _status_height(self, state: VPNState) -> int:
+        """Get status box height based on whether bandwidth is shown."""
+        return self.STATUS_HEIGHT_WITH_BW if self._has_bandwidth(state) else self.STATUS_HEIGHT_BASE
+
+    def _log_box_heights(self, height: int, status_height: int) -> tuple:
         """Calculate log box heights, distributing remainder to first box."""
-        remaining = height - self.STATUS_HEIGHT
+        remaining = height - status_height
         base = max(4, remaining // 2)
         extra = remaining - (base * 2)
         return base + extra, base
@@ -141,7 +245,8 @@ class TUI:
 
     def render(self, state: VPNState, w: int = None, h: int = None) -> str:
         w, h = w or self.term.width, h or self.term.height
-        ext_box_h, int_box_h = self._log_box_heights(h)
+        status_h = self._status_height(state)
+        ext_box_h, int_box_h = self._log_box_heights(h, status_h)
         ext_lines_n, int_lines_n = ext_box_h - 2, int_box_h - 2
         clr = self.term.clear_line()
 
@@ -155,6 +260,13 @@ class TUI:
                 w,
             )
         )
+
+        # Show bandwidth if we have data
+        if self._has_bandwidth(state):
+            ext_bw = self.bandwidth.format(state.ext_bandwidth, "EXT")
+            int_bw = self.bandwidth.format(state.int_bandwidth, "INT")
+            lines.append(self.box.line(f"{ext_bw}  {int_bw}", w))
+
         hint = f"{self.term.color('dim')}Ctrl+C to disconnect{self.term.reset()}"
         lines.append(self.box.line(state.prompt if state.prompt else hint, w))
         lines.append(self.box.bottom(w))
@@ -170,8 +282,9 @@ class TUI:
         self.term.write(self.render(state))
         self.term.flush()
 
-    def position_input(self, prompt: str) -> None:
-        self.term.move_to(3, 3 + len(prompt))
+    def position_input(self, prompt: str, has_bandwidth: bool = False) -> None:
+        row = 4 if has_bandwidth else 3
+        self.term.move_to(row, 3 + len(prompt))
         self.term.flush()
 
     def setup(self) -> None:
