@@ -7,7 +7,10 @@ from infrastructure.log_reader import LogReader
 from presentation.terminal import Terminal, visible_len
 
 
-BOX = {"tl": "╭", "tr": "╮", "bl": "╰", "br": "╯", "h": "─", "v": "│"}
+BOX = {
+    "tl": "╭", "tr": "╮", "bl": "╰", "br": "╯", "h": "─", "v": "│",
+    "ml": "├", "mr": "┤", "mt": "┬", "mb": "┴",
+}
 SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 SPARKLINE_CHARS = "▁▂▃▄▅▆▇█"
 
@@ -159,6 +162,29 @@ class Box:
     def bottom(self, width: int) -> str:
         return self._c(f"{BOX['bl']}{self.hline(width - 2)}{BOX['br']}")
 
+    def separator(self, width: int) -> str:
+        """Horizontal separator line: ├────────┤"""
+        return self._c(f"{BOX['ml']}{self.hline(width - 2)}{BOX['mr']}")
+
+    def top_split(self, title: str, width: int, split_pos: int) -> str:
+        """Top line with vertical divider: ╭─ Title ──┬──────╮"""
+        inner = width - 2
+        left_w = split_pos - 1
+        right_w = inner - split_pos
+        if not title:
+            left = self.hline(left_w)
+        else:
+            title_part = f"{BOX['h']} {title} "
+            left = f"{title_part}{self.hline(left_w - len(title) - 3)}"
+        return self._c(f"{BOX['tl']}{left}{BOX['mt']}{self.hline(right_w)}{BOX['tr']}")
+
+    def separator_join(self, width: int, split_pos: int) -> str:
+        """Separator that joins columns: ├────────┴────────┤"""
+        inner = width - 2
+        left_w = split_pos - 1
+        right_w = inner - split_pos
+        return self._c(f"{BOX['ml']}{self.hline(left_w)}{BOX['mb']}{self.hline(right_w)}{BOX['mr']}")
+
     def _truncate_ansi(self, content: str, max_len: int) -> str:
         """Truncate string preserving ANSI codes."""
         from presentation.terminal import ANSI_RE
@@ -184,6 +210,26 @@ class Box:
         v = self._c(BOX["v"])
         return f"{v} {' ' * (width - 4)} {v}"
 
+    def two_cells(self, left: str, right: str, width: int, split_pos: int) -> str:
+        """Two cells side by side: │ left │ right │"""
+        left_inner = split_pos - 3  # "│ " at start + " " before middle = 3
+        right_inner = width - split_pos - 4  # "│ " after middle + " │" at end = 4
+
+        left_vlen = visible_len(left)
+        right_vlen = visible_len(right)
+
+        if left_vlen > left_inner:
+            left = self._truncate_ansi(left, left_inner)
+            left_vlen = visible_len(left)
+        if right_vlen > right_inner:
+            right = self._truncate_ansi(right, right_inner)
+            right_vlen = visible_len(right)
+
+        v = self._c(BOX["v"])
+        left_pad = " " * (left_inner - left_vlen)
+        right_pad = " " * (right_inner - right_vlen)
+        return f"{v} {left}{left_pad} {v} {right}{right_pad} {v}"
+
 
 class StatusLine:
     """Status indicator formatting."""
@@ -208,26 +254,26 @@ class StatusLine:
             self.WIDTH
         )
 
-    def format(self, status: Status, frame: int = 0) -> str:
-        plain = self.format_plain(status, frame)
-        if not self.term.use_color:
-            return plain
-        return f"{self._get_color(status)}{plain}{self.term.reset()}"
-
-    def _label(self, name: str) -> str:
-        """Format a bold label."""
-        return f"{self.term.color('bold')}{name}{self.term.reset()}"
+    def format(self, label: str, status: Status, frame: int = 0) -> str:
+        """Format status with label: LABEL ● Status"""
+        icon = self._get_icon(status, frame)
+        text = self._get_text(status)
+        color = self._get_color(status)
+        lbl = f"{self.term.color('bold')}{label}{self.term.reset()}"
+        if self.term.use_color:
+            return f"{lbl} {color}{icon} {text}{self.term.reset()}"
+        return f"{label} {icon} {text}"
 
     def format_line(self, ext: Status, int_: Status, frame: int) -> str:
-        ext_c = f"{self._label('EXT')} {self.format(ext, frame)}"
-        int_c = f"{self._label('INT')} {self.format(int_, frame)}"
+        ext_c = self.format("EXT", ext, frame)
+        int_c = self.format("INT", int_, frame)
         return f"{ext_c}  {int_c}"
 
 
 class TUI:
     """Main TUI renderer."""
 
-    STATUS_HEIGHT = 4
+    STATUS_HEIGHT = 5  # top + content + separator + prompt + bottom
 
     def __init__(self, term: Terminal = None, log_reader: LogReader = None):
         self.term = term or Terminal()
@@ -266,27 +312,26 @@ class TUI:
         ext_lines_n, int_lines_n = ext_box_h - 2, int_box_h - 2
         clr = self.term.clear_line()
 
-        lines = []
-        lines.append(self.box.top("Status", w))
+        # Split position for two-column layout (middle of box)
+        split = w // 2
 
-        # Show combined status+bandwidth line if bandwidth available, else plain status
+        lines = []
+        lines.append(self.box.top_split("Status", w, split))
+
+        # Show status in two cells (EXT left, INT right)
         if self._has_bandwidth(state):
-            ext_bw = self.bandwidth.format_with_status(
+            ext_cell = self.bandwidth.format_with_status(
                 state.ext_bandwidth, "EXT", state.ext_status, state.spinner_frame
             )
-            int_bw = self.bandwidth.format_with_status(
+            int_cell = self.bandwidth.format_with_status(
                 state.int_bandwidth, "INT", state.int_status, state.spinner_frame
             )
-            lines.append(self.box.line(f"{ext_bw}  {int_bw}", w))
         else:
-            lines.append(
-                self.box.line(
-                    self.status.format_line(
-                        state.ext_status, state.int_status, state.spinner_frame
-                    ),
-                    w,
-                )
-            )
+            ext_cell = self.status.format("EXT", state.ext_status, state.spinner_frame)
+            int_cell = self.status.format("INT", state.int_status, state.spinner_frame)
+
+        lines.append(self.box.two_cells(ext_cell, int_cell, w, split))
+        lines.append(self.box.separator_join(w, split))
 
         hint = f"{self.term.color('dim')}Ctrl+C to disconnect{self.term.reset()}"
         lines.append(self.box.line(state.prompt if state.prompt else hint, w))
@@ -304,7 +349,7 @@ class TUI:
         self.term.flush()
 
     def position_input(self, prompt: str) -> None:
-        self.term.move_to(3, 3 + len(prompt))
+        self.term.move_to(4, 3 + len(prompt))  # Row 4: after top, content, separator
         self.term.flush()
 
     def setup(self) -> None:
