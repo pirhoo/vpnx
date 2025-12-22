@@ -206,16 +206,19 @@ class Application:
                 self.tui,
                 self.display,
                 config_dir,
+                vpn_config.needs_2fa,
             )
             return 0 if handler.handle(command) else 1
 
         if isinstance(command, ConnectAllCommand):
-            # Build config paths mapping for each VPN
+            # Build config paths and 2FA requirements mapping for each VPN
             config_paths = {}
+            needs_2fa = {}
             for vpn_type in command.vpn_types:
                 vpn_config = self.config.get_vpn(vpn_type.name)
                 if vpn_config:
                     config_paths[vpn_type.name] = vpn_config.config_path
+                    needs_2fa[vpn_type.name] = vpn_config.needs_2fa
 
             handler = ConnectAllHandler(
                 self.vpn_service,
@@ -225,6 +228,7 @@ class Application:
                 self.display,
                 config_paths,
                 command.vpn_types,
+                needs_2fa,
             )
             return 0 if handler.handle(command) else 1
 
