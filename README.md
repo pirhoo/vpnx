@@ -1,6 +1,14 @@
-# VPN Client
+# vpnx
 
-A terminal UI for connecting to ICIJ VPNs.
+A terminal UI for managing OpenVPN connections with 2FA support.
+
+## Features
+
+- Interactive setup wizard for configuring multiple VPNs
+- Full-screen TUI with real-time connection status and bandwidth monitoring
+- Secure credential storage using `pass` (GPG-encrypted)
+- Support for up scripts (DNS/routing configuration)
+- XDG Base Directory compliant configuration
 
 ## Requirements
 
@@ -9,27 +17,77 @@ A terminal UI for connecting to ICIJ VPNs.
 - pass (password manager)
 - gpg
 
+## Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/user/vpnx.git
+cd vpnx
+
+# Verify system dependencies
+make install
+```
+
 ## Setup
 
 ```bash
-# First time setup
+# Run the interactive setup wizard
 make setup
 ```
 
-This will prompt for your GPG key ID and ICIJ credentials.
+The setup wizard will guide you through:
+1. Adding VPN configurations (name, path to .ovpn file, up script requirement)
+2. Setting your username (optional - will prompt at connection if not set)
+3. Configuring the password store (GPG key for secure credential storage)
 
 ## Usage
 
 ```bash
-# Connect to both VPNs (recommended)
-make both
+# Connect to all configured VPNs
+make all
 
-# Or connect to a single VPN
-make ext
-make int
+# Connect to a specific VPN
+python3 run.py connect <vpn-name>
 
-# List available VPNs
+# List configured VPNs
 make list
+
+# Re-run setup to modify configuration
+make setup
+```
+
+## Configuration
+
+Configuration is stored in XDG-compliant directories:
+
+```
+~/.config/vpnx/
+├── config.yaml        # Main configuration
+└── up.sh              # Optional default up script
+
+~/.local/share/vpnx/
+└── credentials/       # GPG-encrypted password store
+
+~/.cache/vpnx/
+└── logs/              # Connection logs
+```
+
+### config.yaml format
+
+```yaml
+username: your-username
+credentials_dir: ~/.local/share/vpnx/credentials
+up_script: /path/to/up.sh  # Optional global up script
+
+vpns:
+  - name: PROD
+    display: Production VPN
+    config_path: /path/to/prod.ovpn
+    needs_up_script: true
+  - name: DEV
+    display: Development VPN
+    config_path: /path/to/dev.ovpn
+    needs_up_script: false
 ```
 
 ## Development
@@ -38,18 +96,18 @@ make list
 make test    # Run tests
 make lint    # Check code style
 make format  # Auto-format code
+make clean   # Remove cache files
 ```
 
 ## Project Structure
 
 ```
 ├── lib/
-│   ├── domain/          # Business logic
-│   ├── application/     # Use cases
-│   ├── infrastructure/  # External integrations
-│   └── presentation/    # UI components
+│   ├── domain/          # Business logic (entities, services)
+│   ├── application/     # Use cases (commands, handlers)
+│   ├── infrastructure/  # External integrations (OpenVPN, pass)
+│   └── presentation/    # UI components (TUI, CLI)
 ├── tests/               # Unit tests
-├── certificates/        # VPN config files
-├── credentials/         # Password store
-└── scripts/             # Helper scripts
+├── certificates/        # VPN config files (local)
+└── scripts/             # Helper scripts (up.sh)
 ```
