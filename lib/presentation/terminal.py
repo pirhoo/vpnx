@@ -76,6 +76,14 @@ class Terminal:
         self.write(f"{self.CSI}?25h")
         self.flush()
 
+    def enter_alt_screen(self) -> None:
+        self.write(f"{self.CSI}?1049h")
+        self.flush()
+
+    def leave_alt_screen(self) -> None:
+        self.write(f"{self.CSI}?1049l")
+        self.flush()
+
     def color(self, name: str) -> str:
         if not self.use_color:
             return ""
