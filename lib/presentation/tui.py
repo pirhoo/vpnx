@@ -119,9 +119,12 @@ class TUI:
         self.status = StatusLine(self.term)
         self.log_reader = log_reader or LogReader()
 
-    def _log_lines_count(self, height: int) -> int:
-        box_h = max(4, (height - self.STATUS_HEIGHT) // 2)
-        return box_h - 2
+    def _log_box_heights(self, height: int) -> tuple:
+        """Calculate log box heights, distributing remainder to first box."""
+        remaining = height - self.STATUS_HEIGHT
+        base = max(4, remaining // 2)
+        extra = remaining - (base * 2)
+        return base + extra, base
 
     def _render_box(
         self, title: str, lines: List[str], count: int, w: int
@@ -138,7 +141,8 @@ class TUI:
 
     def render(self, state: VPNState, w: int = None, h: int = None) -> str:
         w, h = w or self.term.width, h or self.term.height
-        log_n = self._log_lines_count(h)
+        ext_box_h, int_box_h = self._log_box_heights(h)
+        ext_lines_n, int_lines_n = ext_box_h - 2, int_box_h - 2
         clr = self.term.clear_line()
 
         lines = []
@@ -155,10 +159,10 @@ class TUI:
         lines.append(self.box.line(state.prompt if state.prompt else hint, w))
         lines.append(self.box.bottom(w))
 
-        ext_lines = self.log_reader.read_tail(state.ext_log, log_n)
-        int_lines = self.log_reader.read_tail(state.int_log, log_n)
-        lines.extend(self._render_box("EXT Log", ext_lines, log_n, w))
-        lines.extend(self._render_box("INT Log", int_lines, log_n, w))
+        ext_lines = self.log_reader.read_tail(state.ext_log, ext_lines_n)
+        int_lines = self.log_reader.read_tail(state.int_log, int_lines_n)
+        lines.extend(self._render_box("EXT Log", ext_lines, ext_lines_n, w))
+        lines.extend(self._render_box("INT Log", int_lines, int_lines_n, w))
 
         return self.term.home() + (clr + "\n").join(lines) + clr
 
