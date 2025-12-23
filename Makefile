@@ -1,8 +1,7 @@
 .PHONY: help test lint format clean install setup list all connect
 
 PYTHON := python3
-SRC := $(shell find lib -name "*.py") run.py
-TESTS := $(shell find tests -name "test_*.py")
+SRC := lib run.py
 
 help:
 	@echo "vpnx - VPN Client"
