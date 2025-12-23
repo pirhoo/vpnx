@@ -2,7 +2,11 @@
 
 import os
 import re
+import select
 import sys
+import termios
+import tty
+from typing import Optional
 
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
@@ -91,3 +95,16 @@ class Terminal:
 
     def reset(self) -> str:
         return self.color("reset")
+
+    def read_key(self, timeout: float = 0.1) -> Optional[str]:
+        """Read a single key with timeout. Returns None if no input."""
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            ready, _, _ = select.select([sys.stdin], [], [], timeout)
+            if ready:
+                return sys.stdin.read(1)
+            return None
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
