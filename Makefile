@@ -1,4 +1,4 @@
-.PHONY: help test lint format clean install setup list all connect
+.PHONY: help test lint format clean install setup list all connect coverage
 
 PYTHON := python3
 SRC := lib run.py
@@ -14,6 +14,7 @@ help:
 	@echo ""
 	@echo "Development:"
 	@echo "  make test           Run unit tests"
+	@echo "  make coverage       Run tests with coverage report"
 	@echo "  make lint           Check code style"
 	@echo "  make format         Auto-format code"
 	@echo "  make clean          Remove cache files"
@@ -21,6 +22,9 @@ help:
 
 test:
 	@cd lib && $(PYTHON) -m unittest discover -s ../tests -v
+
+coverage:
+	@$(PYTHON) -m pytest --cov=lib --cov-report=term-missing tests/
 
 lint:
 	@if command -v ruff >/dev/null 2>&1; then \
@@ -38,7 +42,8 @@ format:
 
 clean:
 	@rm -rf __pycache__ lib/__pycache__ tests/__pycache__
-	@rm -rf .pytest_cache
+	@rm -rf lib/**/__pycache__
+	@rm -rf .pytest_cache .coverage htmlcov
 	@find . -name "*.pyc" -delete
 	@echo "Cleaned"
 
