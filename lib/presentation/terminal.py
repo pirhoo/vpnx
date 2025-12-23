@@ -96,15 +96,67 @@ class Terminal:
     def reset(self) -> str:
         return self.color("reset")
 
-    def read_key(self, timeout: float = 0.1) -> Optional[str]:
-        """Read a single key with timeout. Returns None if no input."""
-        fd = sys.stdin.fileno()
-        old_settings = termios.tcgetattr(fd)
-        try:
-            tty.setraw(fd)
-            ready, _, _ = select.select([sys.stdin], [], [], timeout)
-            if ready:
-                return sys.stdin.read(1)
+    def _parse_key(self, data: str) -> Optional[str]:
+        """Parse key from input data, handling escape sequences."""
+        if not data:
             return None
+
+        # Check for arrow key escape sequences
+        if "\x1b[A" in data:
+            return "UP"
+        elif "\x1b[B" in data:
+            return "DOWN"
+        elif "\x1b[C" in data:
+            return "RIGHT"
+        elif "\x1b[D" in data:
+            return "LEFT"
+
+        # Return first character for regular keys
+        return data[0]
+
+    def set_raw_input(self) -> None:
+        """Set terminal to raw input mode (no echo, no line buffering).
+
+        Call restore_input() when done to restore normal terminal settings.
+        """
+        fd = sys.stdin.fileno()
+        self._saved_settings = termios.tcgetattr(fd)
+        new_settings = list(self._saved_settings)
+        new_settings[3] = new_settings[3] & ~(termios.ECHO | termios.ICANON)
+        new_settings[6][termios.VMIN] = 0
+        new_settings[6][termios.VTIME] = 0
+        termios.tcsetattr(fd, termios.TCSANOW, new_settings)
+
+    def restore_input(self) -> None:
+        """Restore terminal to normal input mode."""
+        if hasattr(self, "_saved_settings"):
+            fd = sys.stdin.fileno()
+            termios.tcsetattr(fd, termios.TCSANOW, self._saved_settings)
+
+    def read_key(self, timeout: float = 0.1) -> Optional[str]:
+        """Read a single key with timeout. Returns None if no input.
+
+        Returns special strings for arrow keys: 'UP', 'DOWN', 'LEFT', 'RIGHT'.
+
+        Note: For best results in a loop, call set_raw_input() before the loop
+        and restore_input() after. Otherwise this method will toggle raw mode
+        on each call which can cause brief character echo.
+        """
+        fd = sys.stdin.fileno()
+
+        # Check if raw mode is already set by checking if we have saved settings
+        need_restore = not hasattr(self, "_saved_settings")
+        if need_restore:
+            self.set_raw_input()
+
+        try:
+            ready, _, _ = select.select([sys.stdin], [], [], timeout)
+            if not ready:
+                return None
+
+            # Read all available input at once
+            data = os.read(fd, 32).decode("utf-8", errors="ignore")
+            return self._parse_key(data)
         finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            if need_restore:
+                self.restore_input()
