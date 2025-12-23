@@ -30,9 +30,7 @@ class LogReader:
         except (ValueError, IndexError):
             return 0
 
-    def read_tail(
-        self, filepath: str, max_lines: int, offset: int = 0
-    ) -> List[str]:
+    def read_tail(self, filepath: str, max_lines: int, offset: int = 0) -> List[str]:
         """Read last N lines from a log file, with optional scroll offset.
 
         Args:

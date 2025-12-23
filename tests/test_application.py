@@ -8,14 +8,14 @@ from unittest.mock import Mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
 
-from domain.value_objects import VPNType
 from application.commands import (
-    SetupCommand,
-    ListCommand,
-    ConnectCommand,
     ConnectAllCommand,
+    ConnectCommand,
+    ListCommand,
+    SetupCommand,
 )
 from application.handlers import ListHandler
+from domain.value_objects import VPNType
 
 
 class TestCommands(unittest.TestCase):

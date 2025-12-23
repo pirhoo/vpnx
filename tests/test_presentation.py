@@ -9,25 +9,25 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
 
 os.environ["NO_COLOR"] = "1"
 
-from domain import VPNState, Status, BandwidthStats
+from application.commands import (
+    ConnectAllCommand,
+    ConnectCommand,
+    ListCommand,
+    SetupCommand,
+)
+from domain import BandwidthStats, Status, VPNState
+from presentation.cli import CLI
 from presentation.terminal import Terminal, strip_ansi, visible_len
 from presentation.tui import (
-    TUI,
-    Box,
-    StatusLine,
-    Sparkline,
-    BandwidthLine,
     SPINNER,
     STATUS_CONFIG,
+    TUI,
+    BandwidthLine,
+    Box,
+    Sparkline,
+    StatusLine,
     format_bytes,
     format_rate,
-)
-from presentation.cli import CLI
-from application.commands import (
-    SetupCommand,
-    ListCommand,
-    ConnectCommand,
-    ConnectAllCommand,
 )
 
 

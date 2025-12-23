@@ -1,12 +1,11 @@
 """OpenVPN process management."""
 
 from pathlib import Path
-from typing import Dict, Optional, List
+from typing import Dict, List, Optional
 
 from domain.services import ProcessManager
-from domain.value_objects import VPNType, Credentials, ConnectionResult
+from domain.value_objects import ConnectionResult, Credentials, VPNType
 from infrastructure.process import CommandRunner
-
 
 ERROR_PATTERNS = [
     "Network is unreachable",

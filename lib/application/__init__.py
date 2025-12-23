@@ -2,10 +2,10 @@
 
 from application.commands import (
     Command,
-    SetupCommand,
-    ListCommand,
-    ConnectCommand,
     ConnectAllCommand,
+    ConnectCommand,
+    ListCommand,
+    SetupCommand,
 )
 from application.handlers import CommandHandler
 

@@ -3,29 +3,29 @@
 import getpass
 import os
 import signal
-import time
 import threading
+import time
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, List, Optional, Protocol
 
-from domain import VPNType, VPNState, Status, Credentials, ConnectionResult
-from domain.services import VPNService, CredentialStore
-from infrastructure.process import CommandRunner
-from infrastructure.config_parser import OpenVPNConfigParser
-from infrastructure.port_allocator import PortAllocator
-from infrastructure.management import ManagementClient, ManagementState
-from infrastructure.xdg import XDGPaths
-from infrastructure.app_config import AppConfig, VPNConfig
-from infrastructure.log_reader import LogReader
-from presentation.terminal import Terminal
 from application.commands import (
     Command,
-    SetupCommand,
-    ListCommand,
-    ConnectCommand,
     ConnectAllCommand,
+    ConnectCommand,
+    ListCommand,
+    SetupCommand,
 )
+from domain import ConnectionResult, Credentials, Status, VPNState, VPNType
+from domain.services import CredentialStore, VPNService
+from infrastructure.app_config import AppConfig, VPNConfig
+from infrastructure.config_parser import OpenVPNConfigParser
+from infrastructure.log_reader import LogReader
+from infrastructure.management import ManagementClient, ManagementState
+from infrastructure.port_allocator import PortAllocator
+from infrastructure.process import CommandRunner
+from infrastructure.xdg import XDGPaths
+from presentation.terminal import Terminal
 
 
 class Display(Protocol):
@@ -735,7 +735,9 @@ class ConnectHandler(CommandHandler):
                 elif key == "UP":
                     # Calculate max offset based on log file size
                     total_lines = log_reader.count_lines(str(self.log_path))
-                    max_offset = max(0, total_lines - 5)  # Keep at least 5 lines visible
+                    max_offset = max(
+                        0, total_lines - 5
+                    )  # Keep at least 5 lines visible
                     self.state.scroll(self.vpn_type.name, 1, max_offset)
                 elif key == "DOWN":
                     self.state.scroll(self.vpn_type.name, -1)
@@ -745,9 +747,9 @@ class ConnectHandler(CommandHandler):
                     continue
                 iteration = 0
 
-                if not self.service.is_connected(self.vpn_type) or self.service.has_errors(
-                    self.log_path
-                ):
+                if not self.service.is_connected(
+                    self.vpn_type
+                ) or self.service.has_errors(self.log_path):
                     self._reset_vpn()
                     if not self._connect_vpn():
                         self.success = False
@@ -1132,7 +1134,9 @@ class ConnectAllHandler(CommandHandler):
                     # Scroll up on active VPN with max offset based on log size
                     active_name = self.vpn_names[self.state.active_vpn_index]
                     log_path = self.logs.get(active_name)
-                    total_lines = log_reader.count_lines(str(log_path)) if log_path else 0
+                    total_lines = (
+                        log_reader.count_lines(str(log_path)) if log_path else 0
+                    )
                     max_offset = max(0, total_lines - 5)
                     self.state.scroll(active_name, 1, max_offset)
                 elif key == "DOWN":

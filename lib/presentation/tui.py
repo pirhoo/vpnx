@@ -2,11 +2,10 @@
 
 from typing import List, Union
 
-from domain import VPNState, Status, BandwidthStats
+from domain import BandwidthStats, Status, VPNState
 from domain.value_objects import VPNType
 from infrastructure.log_reader import LogReader
 from presentation.terminal import Terminal, visible_len
-
 
 BOX = {
     "tl": "╭",
@@ -351,7 +350,9 @@ class TUI:
 
         lines.append(self.box.line(cell, w))
 
-        hint = f"{self.term.color('dim')}q:quit  r:reconnect  ↑↓:scroll{self.term.reset()}"
+        hint = (
+            f"{self.term.color('dim')}q:quit  r:reconnect  ↑↓:scroll{self.term.reset()}"
+        )
         lines.append(self.box.line(state.prompt if state.prompt else hint, w))
         lines.append(self.box.bottom(w))
 
@@ -477,7 +478,9 @@ class TUI:
             scroll_offset = state.get_scroll_offset(name)
             log_lines = self.log_reader.read_tail(log_path, log_lines_n, scroll_offset)
             marker = "▶ " if state.active_vpn_index == i else ""
-            title = f"{marker}{name} Log" + (f" (+{scroll_offset})" if scroll_offset > 0 else "")
+            title = f"{marker}{name} Log" + (
+                f" (+{scroll_offset})" if scroll_offset > 0 else ""
+            )
             lines.extend(self._render_box(title, log_lines, log_lines_n, w))
 
         return self.term.home() + (clr + "\n").join(lines) + clr

@@ -3,16 +3,15 @@
 import argparse
 from typing import List, Optional
 
-from domain.value_objects import VPNType
 from application.commands import (
     Command,
-    SetupCommand,
-    ListCommand,
-    ConnectCommand,
     ConnectAllCommand,
+    ConnectCommand,
+    ListCommand,
+    SetupCommand,
 )
+from domain.value_objects import VPNType
 from infrastructure.app_config import AppConfig
-
 
 VERSION = "2.0.0"
 

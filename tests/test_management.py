@@ -1,8 +1,8 @@
 """Tests for OpenVPN management interface components."""
 
 import os
-import sys
 import socket
+import sys
 import tempfile
 import threading
 import unittest
@@ -11,14 +11,14 @@ from unittest.mock import Mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
 
-from infrastructure.port_allocator import PortAllocator
-from infrastructure.config_parser import OpenVPNConfigParser, ManagementConfig
+from infrastructure.config_parser import ManagementConfig, OpenVPNConfigParser
 from infrastructure.management import (
-    ManagementClient,
-    ManagementState,
-    ManagementEvent,
     Bytecount,
+    ManagementClient,
+    ManagementEvent,
+    ManagementState,
 )
+from infrastructure.port_allocator import PortAllocator
 
 
 class TestPortAllocator(unittest.TestCase):

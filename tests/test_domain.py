@@ -7,8 +7,8 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
 
-from domain.value_objects import Status, VPNType, Credentials, ConnectionResult
-from domain.entities import VPNState, VPNConnection, BandwidthStats
+from domain.entities import BandwidthStats, VPNConnection, VPNState
+from domain.value_objects import ConnectionResult, Credentials, Status, VPNType
 
 
 class TestStatus(unittest.TestCase):

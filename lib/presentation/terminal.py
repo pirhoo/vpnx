@@ -5,9 +5,7 @@ import re
 import select
 import sys
 import termios
-import tty
 from typing import Optional
-
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 

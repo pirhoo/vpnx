@@ -9,6 +9,17 @@ from typing import Optional
 # Add lib to path
 sys.path.insert(0, str(Path(__file__).parent / "lib"))
 
+from application import (
+    ConnectAllCommand,
+    ConnectCommand,
+    ListCommand,
+    SetupCommand,
+)
+from application.handlers import (
+    ConnectAllHandler,
+    ConnectHandler,
+    SetupHandler,
+)
 from domain import VPNService
 from infrastructure import (
     CommandRunner,
@@ -16,20 +27,9 @@ from infrastructure import (
     OpenVPNProcessManager,
     PassPasswordStore,
 )
-from infrastructure.xdg import XDGPaths
 from infrastructure.app_config import AppConfig
+from infrastructure.xdg import XDGPaths
 from presentation import CLI, TUI, ConsoleDisplay
-from application import (
-    SetupCommand,
-    ListCommand,
-    ConnectCommand,
-    ConnectAllCommand,
-)
-from application.handlers import (
-    SetupHandler,
-    ConnectHandler,
-    ConnectAllHandler,
-)
 
 
 class Application:

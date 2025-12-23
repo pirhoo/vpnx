@@ -1,8 +1,8 @@
 """Domain layer - entities, value objects, and domain services."""
 
-from domain.entities import VPNState, VPNConnection, BandwidthStats
-from domain.value_objects import Status, VPNType, Credentials, ConnectionResult
-from domain.services import VPNService, VPNRepository, ProcessManager, CredentialStore
+from domain.entities import BandwidthStats, VPNConnection, VPNState
+from domain.services import CredentialStore, ProcessManager, VPNRepository, VPNService
+from domain.value_objects import ConnectionResult, Credentials, Status, VPNType
 
 __all__ = [
     "VPNState",

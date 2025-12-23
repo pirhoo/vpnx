@@ -2,9 +2,9 @@
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import List, Optional, Callable
+from typing import Callable, List, Optional
 
-from .value_objects import VPNType, Credentials, ConnectionResult
+from .value_objects import ConnectionResult, Credentials, VPNType
 
 
 class VPNRepository(ABC):
