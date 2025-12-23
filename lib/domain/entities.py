@@ -127,7 +127,8 @@ class VPNState:
     def get_scroll_offset(self, vpn_name: str) -> int:
         return self._scroll_offsets.get(vpn_name, 0)
 
-    def scroll(self, vpn_name: str, delta: int) -> None:
+    def scroll(self, vpn_name: str, delta: int, max_offset: int = 500) -> None:
         """Scroll log view. Positive delta scrolls up (back in history)."""
         current = self._scroll_offsets.get(vpn_name, 0)
-        self._scroll_offsets[vpn_name] = max(0, current + delta)
+        new_offset = max(0, min(max_offset, current + delta))
+        self._scroll_offsets[vpn_name] = new_offset
