@@ -17,6 +17,7 @@ from infrastructure.port_allocator import PortAllocator
 from infrastructure.management import ManagementClient, ManagementState
 from infrastructure.xdg import XDGPaths
 from infrastructure.app_config import AppConfig, VPNConfig
+from presentation.terminal import Terminal
 from application.commands import (
     Command,
     SetupCommand,
@@ -707,6 +708,7 @@ class ConnectHandler(CommandHandler):
     def _monitor_loop(self) -> None:
         check_interval = 20
         iteration = 0
+        terminal = Terminal()
 
         while self.running:
             if self.management_client:
@@ -714,9 +716,23 @@ class ConnectHandler(CommandHandler):
                 self._update_bandwidth(self.management_client)
 
             self.tui.display(self.state, self.vpn_type.name)
-            time.sleep(0.1)
-            iteration += 1
 
+            # Read key with timeout instead of sleep
+            key = terminal.read_key(0.1)
+            if key == "q":
+                self.running = False
+                break
+            elif key == "r":
+                self._reset_vpn()
+                if not self._connect_vpn():
+                    self.success = False
+                    break
+            elif key == "k":
+                self.state.scroll(self.vpn_type.name, 5)
+            elif key == "j":
+                self.state.scroll(self.vpn_type.name, -5)
+
+            iteration += 1
             if iteration < check_interval:
                 continue
             iteration = 0
@@ -1074,6 +1090,7 @@ class ConnectAllHandler(CommandHandler):
     def _monitor_loop(self) -> None:
         check_interval = 20  # Check connection health every 20 iterations (2 sec)
         iteration = 0
+        terminal = Terminal()
 
         while self.running:
             # Update bandwidth from management clients
@@ -1083,7 +1100,34 @@ class ConnectAllHandler(CommandHandler):
                 self._update_bandwidth(vpn, client)
 
             self.tui.display(self.state, self.vpn_names)
-            time.sleep(0.1)
+
+            # Read key with timeout instead of sleep
+            key = terminal.read_key(0.1)
+            if key == "q":
+                self.running = False
+                return
+            elif key == "r":
+                # Reconnect all VPNs
+                for vpn_type in self.vpn_types:
+                    self._reset_vpn(vpn_type)
+                for vpn_type in self.vpn_types:
+                    if not self._connect_vpn(vpn_type):
+                        self.success = False
+                        return
+            elif key == "k":
+                # Scroll up on active VPN
+                active_name = self.vpn_names[self.state.active_vpn_index]
+                self.state.scroll(active_name, 5)
+            elif key == "j":
+                # Scroll down on active VPN
+                active_name = self.vpn_names[self.state.active_vpn_index]
+                self.state.scroll(active_name, -5)
+            elif key and key.isdigit():
+                # Select VPN by number (1-9)
+                idx = int(key) - 1
+                if 0 <= idx < len(self.vpn_names):
+                    self.state.active_vpn_index = idx
+
             iteration += 1
 
             # Only check connection health periodically
