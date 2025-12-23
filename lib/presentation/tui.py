@@ -351,12 +351,16 @@ class TUI:
 
         lines.append(self.box.line(cell, w))
 
-        hint = f"{self.term.color('dim')}Ctrl+C to disconnect{self.term.reset()}"
+        hint = f"{self.term.color('dim')}q:quit  r:reconnect  j/k:scroll{self.term.reset()}"
         lines.append(self.box.line(state.prompt if state.prompt else hint, w))
         lines.append(self.box.bottom(w))
 
-        log_lines = self.log_reader.read_tail(vpn_log, log_lines_n)
-        lines.extend(self._render_box(f"{vpn_name} Log", log_lines, log_lines_n, w))
+        scroll_offset = state.get_scroll_offset(vpn_name)
+        log_lines = self.log_reader.read_tail(vpn_log, log_lines_n, scroll_offset)
+        log_title = f"{vpn_name} Log"
+        if scroll_offset > 0:
+            log_title += f" (+{scroll_offset})"
+        lines.extend(self._render_box(log_title, log_lines, log_lines_n, w))
 
         return self.term.home() + (clr + "\n").join(lines) + clr
 
@@ -407,15 +411,21 @@ class TUI:
         lines.append(self.box.two_cells(cell1, cell2, w, split))
         lines.append(self.box.separator_join(w, split))
 
-        hint = f"{self.term.color('dim')}Ctrl+C to disconnect{self.term.reset()}"
+        hint = f"{self.term.color('dim')}q:quit  r:reconnect  j/k:scroll  1-2:select{self.term.reset()}"
         lines.append(self.box.line(state.prompt if state.prompt else hint, w))
         lines.append(self.box.bottom(w))
 
-        # Log boxes
-        log1_lines = self.log_reader.read_tail(log1, first_lines_n)
-        log2_lines = self.log_reader.read_tail(log2, second_lines_n)
-        lines.extend(self._render_box(f"{name1} Log", log1_lines, first_lines_n, w))
-        lines.extend(self._render_box(f"{name2} Log", log2_lines, second_lines_n, w))
+        # Log boxes with scroll offset - highlight active one
+        scroll1 = state.get_scroll_offset(name1)
+        scroll2 = state.get_scroll_offset(name2)
+        log1_lines = self.log_reader.read_tail(log1, first_lines_n, scroll1)
+        log2_lines = self.log_reader.read_tail(log2, second_lines_n, scroll2)
+        marker1 = "▶ " if state.active_vpn_index == 0 else ""
+        marker2 = "▶ " if state.active_vpn_index == 1 else ""
+        title1 = f"{marker1}{name1} Log" + (f" (+{scroll1})" if scroll1 > 0 else "")
+        title2 = f"{marker2}{name2} Log" + (f" (+{scroll2})" if scroll2 > 0 else "")
+        lines.extend(self._render_box(title1, log1_lines, first_lines_n, w))
+        lines.extend(self._render_box(title2, log2_lines, second_lines_n, w))
 
         return self.term.home() + (clr + "\n").join(lines) + clr
 
@@ -455,17 +465,20 @@ class TUI:
                 cell = self.status.format(name, status, state.spinner_frame)
             lines.append(self.box.line(cell, w))
 
-        hint = f"{self.term.color('dim')}Ctrl+C to disconnect{self.term.reset()}"
+        hint = f"{self.term.color('dim')}q:quit  r:reconnect  j/k:scroll  1-{n}:select{self.term.reset()}"
         lines.append(self.box.line(state.prompt if state.prompt else hint, w))
         lines.append(self.box.bottom(w))
 
-        # Render log boxes for each VPN
+        # Render log boxes for each VPN with scroll offset - highlight active one
         log_lines_n = log_h_per_vpn - 2
-        for name in vpn_names:
+        for i, name in enumerate(vpn_names):
             vpn_type = VPNType(name)
             log_path = state.get_log(vpn_type)
-            log_lines = self.log_reader.read_tail(log_path, log_lines_n)
-            lines.extend(self._render_box(f"{name} Log", log_lines, log_lines_n, w))
+            scroll_offset = state.get_scroll_offset(name)
+            log_lines = self.log_reader.read_tail(log_path, log_lines_n, scroll_offset)
+            marker = "▶ " if state.active_vpn_index == i else ""
+            title = f"{marker}{name} Log" + (f" (+{scroll_offset})" if scroll_offset > 0 else "")
+            lines.extend(self._render_box(title, log_lines, log_lines_n, w))
 
         return self.term.home() + (clr + "\n").join(lines) + clr
 
