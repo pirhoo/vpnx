@@ -89,10 +89,12 @@ class VPNState:
     _statuses: Dict[str, Status] = field(default_factory=dict)
     _logs: Dict[str, str] = field(default_factory=dict)
     _bandwidth: Dict[str, BandwidthStats] = field(default_factory=dict)
+    _scroll_offsets: Dict[str, int] = field(default_factory=dict)
 
     # Non-VPN-specific state
     spinner_frame: int = 0
     prompt: str = ""
+    active_vpn_index: int = 0  # Which VPN's log is selected for scrolling
 
     def initialize(self, vpn_names: List[str]) -> None:
         """Initialize state for given VPN names."""
@@ -100,6 +102,7 @@ class VPNState:
             self._statuses[name] = Status.DISCONNECTED
             self._logs[name] = ""
             self._bandwidth[name] = BandwidthStats()
+            self._scroll_offsets[name] = 0
 
     def set_status(self, vpn_type: VPNType, status: Status) -> None:
         self._statuses[vpn_type.name] = status
@@ -120,3 +123,11 @@ class VPNState:
 
     def advance_spinner(self) -> None:
         self.spinner_frame += 1
+
+    def get_scroll_offset(self, vpn_name: str) -> int:
+        return self._scroll_offsets.get(vpn_name, 0)
+
+    def scroll(self, vpn_name: str, delta: int) -> None:
+        """Scroll log view. Positive delta scrolls up (back in history)."""
+        current = self._scroll_offsets.get(vpn_name, 0)
+        self._scroll_offsets[vpn_name] = max(0, current + delta)
