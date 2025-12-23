@@ -9,10 +9,13 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
 
+from unittest.mock import Mock, patch
+
 from domain.value_objects import VPNType
-from infrastructure.process import CommandRunner, CommandResult
-from infrastructure.vpn_repository import FileVPNRepository
 from infrastructure.log_reader import LogReader
+from infrastructure.password_store import GPGPasswordStore
+from infrastructure.process import CommandResult, CommandRunner
+from infrastructure.vpn_repository import FileVPNRepository
 
 
 class TestCommandResult(unittest.TestCase):
@@ -159,6 +162,143 @@ class TestLogReader(unittest.TestCase):
         self.temp_file.close()
         lines = self.reader.read_tail(self.temp_file.name, 10)
         self.assertEqual(lines, ["line1", "line2"])
+
+    def test_read_tail_with_offset(self):
+        self.temp_file.write("line1\nline2\nline3\nline4\nline5\n")
+        self.temp_file.close()
+        # Offset 2 means skip last 2 lines
+        lines = self.reader.read_tail(self.temp_file.name, 2, offset=2)
+        self.assertEqual(lines, ["line2", "line3"])
+
+    def test_read_tail_with_offset_exceeds_lines(self):
+        self.temp_file.write("line1\nline2\n")
+        self.temp_file.close()
+        # Offset exceeds available lines
+        lines = self.reader.read_tail(self.temp_file.name, 2, offset=10)
+        self.assertEqual(lines, ["line1", "line2"])
+
+    def test_count_lines_empty_file(self):
+        self.temp_file.close()
+        count = self.reader.count_lines(self.temp_file.name)
+        self.assertEqual(count, 0)
+
+    def test_count_lines_single_line(self):
+        self.temp_file.write("hello\n")
+        self.temp_file.close()
+        count = self.reader.count_lines(self.temp_file.name)
+        self.assertEqual(count, 1)
+
+    def test_count_lines_multiple_lines(self):
+        self.temp_file.write("line1\nline2\nline3\n")
+        self.temp_file.close()
+        count = self.reader.count_lines(self.temp_file.name)
+        self.assertEqual(count, 3)
+
+    def test_count_lines_nonexistent_file(self):
+        count = self.reader.count_lines("/nonexistent/file")
+        self.assertEqual(count, 0)
+
+    def test_count_lines_empty_path(self):
+        count = self.reader.count_lines("")
+        self.assertEqual(count, 0)
+
+
+class TestGPGPasswordStore(unittest.TestCase):
+    """Tests for GPGPasswordStore."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.base_path = Path(self.temp_dir) / "credentials"
+        self.store = GPGPasswordStore(self.base_path)
+
+    def tearDown(self):
+        import shutil
+
+        shutil.rmtree(self.temp_dir)
+
+    def test_init_sets_paths(self):
+        self.assertEqual(self.store.password_file, Path(str(self.base_path) + ".gpg"))
+        self.assertEqual(self.store.gpg_id_file, Path(str(self.base_path) + ".gpg-id"))
+
+    def test_is_initialized_false_initially(self):
+        self.assertFalse(self.store.is_initialized())
+
+    def test_is_initialized_true_after_init(self):
+        self.store.initialize("ABCD1234")
+        self.assertTrue(self.store.is_initialized())
+
+    def test_initialize_creates_gpg_id_file(self):
+        self.store.initialize("ABCD1234")
+        self.assertTrue(self.store.gpg_id_file.exists())
+        self.assertEqual(self.store.gpg_id_file.read_text(), "ABCD1234\n")
+
+    def test_initialize_strips_whitespace(self):
+        self.store.initialize("  ABCD1234  \n")
+        self.assertEqual(self.store.gpg_id_file.read_text(), "ABCD1234\n")
+
+    def test_has_password_false_initially(self):
+        self.assertFalse(self.store.has_password())
+
+    def test_get_gpg_id_returns_none_when_not_initialized(self):
+        self.assertIsNone(self.store.get_gpg_id())
+
+    def test_get_gpg_id_returns_id_after_init(self):
+        self.store.initialize("ABCD1234")
+        self.assertEqual(self.store.get_gpg_id(), "ABCD1234")
+
+    def test_get_password_returns_none_when_no_file(self):
+        self.assertIsNone(self.store.get_password("user"))
+
+    def test_store_password_fails_when_not_initialized(self):
+        result = self.store.store_password("secret")
+        self.assertFalse(result)
+
+    @patch("subprocess.run")
+    def test_get_password_calls_gpg_decrypt(self, mock_run):
+        # Create password file
+        self.store.password_file.touch()
+        mock_run.return_value = Mock(returncode=0, stdout="secret_password")
+
+        result = self.store.get_password("user")
+
+        self.assertEqual(result, "secret_password")
+        mock_run.assert_called_once()
+        args = mock_run.call_args[0][0]
+        self.assertIn("gpg", args)
+        self.assertIn("--decrypt", args)
+
+    @patch("subprocess.run")
+    def test_get_password_returns_none_on_gpg_error(self, mock_run):
+        self.store.password_file.touch()
+        mock_run.return_value = Mock(returncode=1, stdout="")
+
+        result = self.store.get_password("user")
+
+        self.assertIsNone(result)
+
+    @patch("subprocess.run")
+    def test_store_password_calls_gpg_encrypt(self, mock_run):
+        self.store.initialize("ABCD1234")
+        mock_run.return_value = Mock(returncode=0)
+
+        result = self.store.store_password("secret")
+
+        self.assertTrue(result)
+        mock_run.assert_called_once()
+        args = mock_run.call_args[0][0]
+        self.assertIn("gpg", args)
+        self.assertIn("--encrypt", args)
+        self.assertIn("--recipient", args)
+        self.assertIn("ABCD1234", args)
+
+    @patch("subprocess.run")
+    def test_store_password_returns_false_on_gpg_error(self, mock_run):
+        self.store.initialize("ABCD1234")
+        mock_run.return_value = Mock(returncode=1)
+
+        result = self.store.store_password("secret")
+
+        self.assertFalse(result)
 
 
 if __name__ == "__main__":
