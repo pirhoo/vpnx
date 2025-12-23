@@ -27,18 +27,10 @@ coverage:
 	@$(PYTHON) -m pytest --cov=lib --cov-report=term-missing tests/
 
 lint:
-	@if command -v ruff >/dev/null 2>&1; then \
-		ruff check $(SRC) && ruff format --check $(SRC) && echo "Lint OK"; \
-	else \
-		$(PYTHON) -m py_compile $(SRC) && echo "Syntax OK"; \
-	fi
+	@ruff check $(SRC) && ruff format --check $(SRC) && echo "Lint OK"
 
 format:
-	@if command -v ruff >/dev/null 2>&1; then \
-		ruff check --fix $(SRC) && ruff format $(SRC) && echo "Format OK"; \
-	else \
-		echo "ruff not installed"; \
-	fi
+	@ruff check --fix $(SRC) && ruff format $(SRC) && echo "Format OK"
 
 clean:
 	@rm -rf __pycache__ lib/__pycache__ tests/__pycache__
