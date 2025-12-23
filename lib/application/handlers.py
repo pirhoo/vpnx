@@ -17,6 +17,7 @@ from infrastructure.port_allocator import PortAllocator
 from infrastructure.management import ManagementClient, ManagementState
 from infrastructure.xdg import XDGPaths
 from infrastructure.app_config import AppConfig, VPNConfig
+from infrastructure.log_reader import LogReader
 from presentation.terminal import Terminal
 from application.commands import (
     Command,
@@ -709,6 +710,7 @@ class ConnectHandler(CommandHandler):
         check_interval = 20
         iteration = 0
         terminal = Terminal()
+        log_reader = LogReader()
 
         # Set raw input mode for the entire loop to prevent key echo
         terminal.set_raw_input()
@@ -731,7 +733,10 @@ class ConnectHandler(CommandHandler):
                         self.success = False
                         break
                 elif key == "UP":
-                    self.state.scroll(self.vpn_type.name, 1)
+                    # Calculate max offset based on log file size
+                    total_lines = log_reader.count_lines(str(self.log_path))
+                    max_offset = max(0, total_lines - 5)  # Keep at least 5 lines visible
+                    self.state.scroll(self.vpn_type.name, 1, max_offset)
                 elif key == "DOWN":
                     self.state.scroll(self.vpn_type.name, -1)
 
@@ -1096,6 +1101,7 @@ class ConnectAllHandler(CommandHandler):
         check_interval = 20  # Check connection health every 20 iterations (2 sec)
         iteration = 0
         terminal = Terminal()
+        log_reader = LogReader()
 
         # Set raw input mode for the entire loop to prevent key echo
         terminal.set_raw_input()
@@ -1123,9 +1129,12 @@ class ConnectAllHandler(CommandHandler):
                             self.success = False
                             return
                 elif key == "UP":
-                    # Scroll up on active VPN
+                    # Scroll up on active VPN with max offset based on log size
                     active_name = self.vpn_names[self.state.active_vpn_index]
-                    self.state.scroll(active_name, 1)
+                    log_path = self.logs.get(active_name)
+                    total_lines = log_reader.count_lines(str(log_path)) if log_path else 0
+                    max_offset = max(0, total_lines - 5)
+                    self.state.scroll(active_name, 1, max_offset)
                 elif key == "DOWN":
                     # Scroll down on active VPN
                     active_name = self.vpn_names[self.state.active_vpn_index]

@@ -12,6 +12,24 @@ class LogReader:
     def __init__(self, runner: Optional[CommandRunner] = None):
         self.runner = runner or CommandRunner()
 
+    def count_lines(self, filepath: str) -> int:
+        """Count total lines in a log file."""
+        if not filepath or not os.path.exists(filepath):
+            return 0
+
+        result = self.runner.run(["wc", "-l", filepath])
+        if not result.success:
+            result = self.runner.run_sudo(["wc", "-l", filepath])
+
+        if not result.success:
+            return 0
+
+        # wc -l output format: "123 /path/to/file"
+        try:
+            return int(result.stdout.strip().split()[0])
+        except (ValueError, IndexError):
+            return 0
+
     def read_tail(
         self, filepath: str, max_lines: int, offset: int = 0
     ) -> List[str]:
