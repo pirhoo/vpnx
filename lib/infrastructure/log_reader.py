@@ -12,17 +12,34 @@ class LogReader:
     def __init__(self, runner: Optional[CommandRunner] = None):
         self.runner = runner or CommandRunner()
 
-    def read_tail(self, filepath: str, max_lines: int) -> List[str]:
-        """Read last N lines from a log file."""
+    def read_tail(
+        self, filepath: str, max_lines: int, offset: int = 0
+    ) -> List[str]:
+        """Read last N lines from a log file, with optional scroll offset.
+
+        Args:
+            filepath: Path to the log file
+            max_lines: Number of lines to return
+            offset: Number of lines to skip from the end (for scrolling)
+        """
         if not filepath or not os.path.exists(filepath):
             return []
 
-        result = self.runner.run(["tail", "-n", str(max_lines), filepath])
+        # Read more lines if we need to offset
+        lines_to_read = max_lines + offset
+        result = self.runner.run(["tail", "-n", str(lines_to_read), filepath])
         if not result.success:
-            result = self.runner.run_sudo(["tail", "-n", str(max_lines), filepath])
+            result = self.runner.run_sudo(["tail", "-n", str(lines_to_read), filepath])
 
         if not result.success:
             return []
 
         lines = [line.replace("\r", "") for line in result.stdout.split("\n")]
-        return lines[:-1] if lines and not lines[-1] else lines
+        lines = lines[:-1] if lines and not lines[-1] else lines
+
+        # Apply offset: skip the last 'offset' lines
+        if offset > 0 and len(lines) > offset:
+            lines = lines[: len(lines) - offset]
+
+        # Return only the last max_lines
+        return lines[-max_lines:] if len(lines) > max_lines else lines
