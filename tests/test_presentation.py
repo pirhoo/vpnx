@@ -429,13 +429,15 @@ class TestTUISingle(unittest.TestCase):
     def test_render_single_shows_hint_when_no_prompt(self):
         state = VPNState()
         result = self.tui.render_single(state, "PROD", 60, 20)
-        self.assertIn("Ctrl+C to disconnect", result)
+        self.assertIn("q:quit", result)
+        self.assertIn("r:reconnect", result)
+        self.assertIn("j/k:scroll", result)
 
     def test_render_single_shows_prompt_when_set(self):
         state = VPNState(prompt="Enter code: ")
         result = self.tui.render_single(state, "PROD", 60, 20)
         self.assertIn("Enter code:", result)
-        self.assertNotIn("Ctrl+C", result)
+        self.assertNotIn("q:quit", result)
 
     def test_render_single_consistent_width(self):
         state = VPNState()
@@ -481,7 +483,8 @@ class TestTUITwo(unittest.TestCase):
         state = VPNState()
         state.initialize(["PROD", "DEV"])
         result = self.tui.render_two(state, ["PROD", "DEV"], 80, 24)
-        self.assertIn("Ctrl+C to disconnect", result)
+        self.assertIn("q:quit", result)
+        self.assertIn("r:reconnect", result)
 
     def test_render_two_shows_prompt_when_set(self):
         state = VPNState()
@@ -489,7 +492,7 @@ class TestTUITwo(unittest.TestCase):
         state.prompt = "Enter code: "
         result = self.tui.render_two(state, ["PROD", "DEV"], 80, 24)
         self.assertIn("Enter code:", result)
-        self.assertNotIn("Ctrl+C", result)
+        self.assertNotIn("q:quit", result)
 
     def test_render_two_consistent_width(self):
         state = VPNState()
@@ -539,7 +542,8 @@ class TestTUIMulti(unittest.TestCase):
         vpn_names = ["PROD", "DEV", "STAGING"]
         state.initialize(vpn_names)
         result = self.tui.render_multi(state, vpn_names, 80, 30)
-        self.assertIn("Ctrl+C to disconnect", result)
+        self.assertIn("q:quit", result)
+        self.assertIn("r:reconnect", result)
 
     def test_render_multi_shows_prompt_when_set(self):
         state = VPNState()
@@ -548,7 +552,7 @@ class TestTUIMulti(unittest.TestCase):
         state.prompt = "2FA code: "
         result = self.tui.render_multi(state, vpn_names, 80, 30)
         self.assertIn("2FA code:", result)
-        self.assertNotIn("Ctrl+C", result)
+        self.assertNotIn("q:quit", result)
 
     def test_render_multi_consistent_width(self):
         state = VPNState()
