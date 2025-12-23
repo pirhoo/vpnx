@@ -105,6 +105,10 @@ class Terminal:
         if "\x03" in data:
             return "CTRL_C"
 
+        # Check for Tab (HT character)
+        if "\t" in data:
+            return "TAB"
+
         # Check for arrow key escape sequences
         if "\x1b[A" in data:
             return "UP"
