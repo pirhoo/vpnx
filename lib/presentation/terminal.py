@@ -101,6 +101,10 @@ class Terminal:
         if not data:
             return None
 
+        # Check for Ctrl+C (ETX character)
+        if "\x03" in data:
+            return "CTRL_C"
+
         # Check for arrow key escape sequences
         if "\x1b[A" in data:
             return "UP"

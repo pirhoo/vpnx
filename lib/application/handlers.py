@@ -724,7 +724,7 @@ class ConnectHandler(CommandHandler):
 
                 # Read key with timeout instead of sleep
                 key = terminal.read_key(0.1)
-                if key == "q":
+                if key in ("q", "CTRL_C"):
                     self.running = False
                     break
                 elif key == "r":
@@ -1117,7 +1117,7 @@ class ConnectAllHandler(CommandHandler):
 
                 # Read key with timeout instead of sleep
                 key = terminal.read_key(0.1)
-                if key == "q":
+                if key in ("q", "CTRL_C"):
                     self.running = False
                     return
                 elif key == "r":
