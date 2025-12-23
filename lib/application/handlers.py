@@ -1139,6 +1139,11 @@ class ConnectAllHandler(CommandHandler):
                     # Scroll down on active VPN
                     active_name = self.vpn_names[self.state.active_vpn_index]
                     self.state.scroll(active_name, -1)
+                elif key == "TAB":
+                    # Cycle to next VPN panel
+                    self.state.active_vpn_index = (
+                        self.state.active_vpn_index + 1
+                    ) % len(self.vpn_names)
                 elif key and key.isdigit():
                     # Select VPN by number (1-9)
                     idx = int(key) - 1
