@@ -386,7 +386,8 @@ class TestTUIBandwidth(unittest.TestCase):
     def test_render_single_without_bandwidth(self):
         state = VPNState()
         result = self.tui.render_single(state, "PROD", 60, 20)
-        self.assertNotIn("↓", result)
+        # Without bandwidth, no B/s rate should be shown
+        self.assertNotIn("B/s", result)
 
     def test_render_single_with_bandwidth(self):
         from domain.value_objects import VPNType
@@ -394,8 +395,8 @@ class TestTUIBandwidth(unittest.TestCase):
         state = VPNState()
         state.get_bandwidth(VPNType("PROD")).total_in = 1000
         result = self.tui.render_single(state, "PROD", 80, 20)
-        self.assertIn("↓", result)
-        self.assertIn("↑", result)
+        # Bandwidth display shows rates
+        self.assertIn("B/s", result)
 
     def test_render_single_with_bandwidth_shows_status_icon(self):
         from domain.value_objects import VPNType
@@ -431,7 +432,7 @@ class TestTUISingle(unittest.TestCase):
         result = self.tui.render_single(state, "PROD", 60, 20)
         self.assertIn("q:quit", result)
         self.assertIn("r:reconnect", result)
-        self.assertIn("j/k:scroll", result)
+        self.assertIn("↑↓:scroll", result)
 
     def test_render_single_shows_prompt_when_set(self):
         state = VPNState(prompt="Enter code: ")

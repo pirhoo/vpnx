@@ -351,7 +351,7 @@ class TUI:
 
         lines.append(self.box.line(cell, w))
 
-        hint = f"{self.term.color('dim')}q:quit  r:reconnect  j/k:scroll{self.term.reset()}"
+        hint = f"{self.term.color('dim')}q:quit  r:reconnect  ↑↓:scroll{self.term.reset()}"
         lines.append(self.box.line(state.prompt if state.prompt else hint, w))
         lines.append(self.box.bottom(w))
 
@@ -411,7 +411,7 @@ class TUI:
         lines.append(self.box.two_cells(cell1, cell2, w, split))
         lines.append(self.box.separator_join(w, split))
 
-        hint = f"{self.term.color('dim')}q:quit  r:reconnect  j/k:scroll  1-2:select{self.term.reset()}"
+        hint = f"{self.term.color('dim')}q:quit  r:reconnect  ↑↓:scroll  1-2:select{self.term.reset()}"
         lines.append(self.box.line(state.prompt if state.prompt else hint, w))
         lines.append(self.box.bottom(w))
 
@@ -465,7 +465,7 @@ class TUI:
                 cell = self.status.format(name, status, state.spinner_frame)
             lines.append(self.box.line(cell, w))
 
-        hint = f"{self.term.color('dim')}q:quit  r:reconnect  j/k:scroll  1-{n}:select{self.term.reset()}"
+        hint = f"{self.term.color('dim')}q:quit  r:reconnect  ↑↓:scroll  1-{n}:select{self.term.reset()}"
         lines.append(self.box.line(state.prompt if state.prompt else hint, w))
         lines.append(self.box.bottom(w))
 
