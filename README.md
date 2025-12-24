@@ -2,6 +2,9 @@
 
 A terminal UI for managing OpenVPN connections with 2FA support.
 
+<img width="1770" height="1451" alt="README" src="https://github.com/user-attachments/assets/b28c7b47-e6d0-44e2-a63f-57d7d5675e25" />
+
+
 ## Features
 
 - Interactive setup wizard for configuring multiple VPNs
