@@ -1,1 +1,1 @@
-"""ICIJ VPN Client library."""
+"""vpnx"""

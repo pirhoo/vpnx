@@ -94,7 +94,7 @@ class Sparkline:
 class BandwidthLine:
     """Bandwidth display with sparkline and stats."""
 
-    # Fixed content: "LBL ● ↓nnnnnnnn/s ↑nnnnnnnn/s  (nnnnnn)"
+    # Fixed content: "LBL ● nnnnnnnn/s↓ nnnnnnnn/s↑  (nnnnnn)"
     # Visible chars: 3 + 2 + 12 + 1 + 12 + 2 + ~10 = ~42 without sparkline
     FIXED_WIDTH = 42
 
@@ -114,7 +114,7 @@ class BandwidthLine:
         return self.sparkline.render(combined, width)
 
     def format(self, stats: BandwidthStats, label: str, width: int = 50) -> str:
-        """Format bandwidth line: LABEL ↓rate ↑rate [sparkline] (total)."""
+        """Format bandwidth line: LABEL rate↓ rate↑ [sparkline] (total)."""
         down = format_rate(stats.rate_in)
         up = format_rate(stats.rate_out)
         total = format_bytes(stats.total_in + stats.total_out)
@@ -122,8 +122,8 @@ class BandwidthLine:
         spark = self._get_sparkline(stats, spark_width)
 
         lbl = f"{self.term.color('bold')}{label}{self.term.reset()}"
-        down_c = f"{self.term.color('green')}↓{down:>10}{self.term.reset()}"
-        up_c = f"{self.term.color('cyan')}↑{up:>10}{self.term.reset()}"
+        down_c = f"{self.term.color('green')}{down:>10}↓{self.term.reset()}"
+        up_c = f"{self.term.color('cyan')}{up:>10}↑{self.term.reset()}"
         total_c = f"{self.term.color('dim')}({total}){self.term.reset()}"
 
         return f"{lbl} {down_c} {up_c} {spark} {total_c}"
@@ -136,7 +136,7 @@ class BandwidthLine:
         frame: int = 0,
         width: int = 50,
     ) -> str:
-        """Format bandwidth with status icon: LABEL ● ↓rate ↑rate [sparkline] (total)."""
+        """Format bandwidth with status icon: LABEL ● rate↓ rate↑ [sparkline] (total)."""
         icon, _, color_name = STATUS_CONFIG[status]
         if icon is None:
             icon = SPINNER[frame % len(SPINNER)]
@@ -149,8 +149,8 @@ class BandwidthLine:
 
         lbl = f"{self.term.color('bold')}{label}{self.term.reset()}"
         icon_c = f"{self.term.color(color_name)}{icon}{self.term.reset()}"
-        down_c = f"{self.term.color('green')}↓{down:>10}{self.term.reset()}"
-        up_c = f"{self.term.color('cyan')}↑{up:>10}{self.term.reset()}"
+        down_c = f"{self.term.color('green')}{down:>10}↓{self.term.reset()}"
+        up_c = f"{self.term.color('cyan')}{up:>10}↑{self.term.reset()}"
         total_c = f"{self.term.color('dim')}({total}){self.term.reset()}"
 
         return f"{lbl} {icon_c} {down_c} {up_c} {spark} {total_c}"
