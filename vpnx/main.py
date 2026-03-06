@@ -3,7 +3,6 @@
 
 import subprocess
 import sys
-from pathlib import Path
 from typing import Optional
 
 from vpnx.application import (
