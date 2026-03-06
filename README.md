@@ -11,12 +11,11 @@
 | **License** | [![License](https://img.shields.io/github/license/pirhoo/vpnx?style=flat-square)](https://github.com/pirhoo/vpnx/blob/main/LICENSE) |
 | **Open issues** | [![Open issues](https://img.shields.io/github/issues/pirhoo/vpnx?style=flat-square&color=success)](https://github.com/pirhoo/vpnx/issues) |
 
-</div>
-
 A terminal UI for managing OpenVPN connections with 2FA support.
 
 <img width="1770" height="1451" alt="README" src="https://github.com/user-attachments/assets/b28c7b47-e6d0-44e2-a63f-57d7d5675e25" />
 
+</div>
 
 ## Features
 
