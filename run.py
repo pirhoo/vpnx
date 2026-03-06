@@ -73,9 +73,7 @@ class Application:
         down_script_vpns = [v.name for v in self.config.vpns if v.needs_down_script]
 
         def resolve_script(global_path, vpns):
-            path = global_path or next(
-                (v for v in vpns if v), None
-            )
+            path = global_path or next((v for v in vpns if v), None)
             return path if path and path.exists() else None
 
         up_script = resolve_script(

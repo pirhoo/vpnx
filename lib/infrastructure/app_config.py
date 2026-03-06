@@ -9,6 +9,7 @@ def _opt_path(data: dict, key: str) -> Optional[Path]:
     """Read an optional Path from a dict, expanding ~ if present."""
     return Path(data[key]).expanduser() if data.get(key) else None
 
+
 try:
     import yaml
 

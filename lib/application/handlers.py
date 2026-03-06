@@ -196,12 +196,12 @@ class SetupHandler(CommandHandler):
         else:
             self.display.print("  Credentials: not set (will prompt)")
 
-    def _ask_script_path(self, label: str, current: Optional[Path] = None) -> Optional[Path]:
+    def _ask_script_path(
+        self, label: str, current: Optional[Path] = None
+    ) -> Optional[Path]:
         """Prompt for a script path, validate it exists and is executable."""
         default_hint = f" [{current}]" if current else ""
-        path_str = self.display.input(
-            f"{label} path{default_hint}: "
-        ).strip()
+        path_str = self.display.input(f"{label} path{default_hint}: ").strip()
         if not path_str and current:
             path = current
         elif not path_str:
@@ -218,20 +218,13 @@ class SetupHandler(CommandHandler):
             return path
 
         if not os.access(path, os.X_OK):
-            self.display.print(
-                f"  Warning: {label} is not executable: {path}"
-            )
+            self.display.print(f"  Warning: {label} is not executable: {path}")
             response = (
-                self.display.input("  Make it executable now? [Y/n]: ")
-                .strip()
-                .lower()
+                self.display.input("  Make it executable now? [Y/n]: ").strip().lower()
             )
             if response != "n":
                 path.chmod(
-                    path.stat().st_mode
-                    | stat.S_IXUSR
-                    | stat.S_IXGRP
-                    | stat.S_IXOTH
+                    path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
                 )
                 self.display.print(f"  Made executable: {path}")
 
@@ -240,9 +233,7 @@ class SetupHandler(CommandHandler):
     def _ask_yn_toggle(self, prompt: str, current: bool) -> bool:
         """Ask a y/n question with a default from the current value."""
         default = "Y" if current else "N"
-        answer = (
-            self.display.input(f"{prompt} [y/n] ({default}): ").strip().lower()
-        )
+        answer = self.display.input(f"{prompt} [y/n] ({default}): ").strip().lower()
         if answer == "y":
             return True
         if answer == "n":
