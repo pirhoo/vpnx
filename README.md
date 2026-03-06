@@ -1,5 +1,7 @@
 # vpnx
 
+<div align="center">
+
 |      | Status |
 | ---: | :--- |
 | **CI checks** | [![CI](https://img.shields.io/github/actions/workflow/status/pirhoo/vpnx/ci.yml?style=flat-square)](https://github.com/pirhoo/vpnx/actions/workflows/ci.yml) |
@@ -8,6 +10,8 @@
 | **Python** | [![Python](https://img.shields.io/pypi/pyversions/vpnx?style=flat-square)](https://pypi.org/project/vpnx/) |
 | **License** | [![License](https://img.shields.io/github/license/pirhoo/vpnx?style=flat-square)](https://github.com/pirhoo/vpnx/blob/main/LICENSE) |
 | **Open issues** | [![Open issues](https://img.shields.io/github/issues/pirhoo/vpnx?style=flat-square&color=success)](https://github.com/pirhoo/vpnx/issues) |
+
+</div>
 
 A terminal UI for managing OpenVPN connections with 2FA support.
 
