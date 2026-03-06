@@ -1,13 +1,13 @@
 """Application layer - use cases and command handlers."""
 
-from application.commands import (
+from vpnx.application.commands import (
     Command,
     ConnectAllCommand,
     ConnectCommand,
     ListCommand,
     SetupCommand,
 )
-from application.handlers import CommandHandler
+from vpnx.application.handlers import CommandHandler
 
 __all__ = [
     "Command",

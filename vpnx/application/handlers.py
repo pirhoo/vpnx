@@ -10,23 +10,23 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, List, Optional, Protocol
 
-from application.commands import (
+from vpnx.application.commands import (
     Command,
     ConnectAllCommand,
     ConnectCommand,
     ListCommand,
     SetupCommand,
 )
-from domain import ConnectionResult, Credentials, Status, VPNState, VPNType
-from domain.services import CredentialStore, VPNService
-from infrastructure.app_config import AppConfig, VPNConfig
-from infrastructure.config_parser import OpenVPNConfigParser
-from infrastructure.log_reader import LogReader
-from infrastructure.management import ManagementClient, ManagementState
-from infrastructure.port_allocator import PortAllocator
-from infrastructure.process import CommandRunner
-from infrastructure.xdg import XDGPaths
-from presentation.terminal import Terminal
+from vpnx.domain import ConnectionResult, Credentials, Status, VPNState, VPNType
+from vpnx.domain.services import CredentialStore, VPNService
+from vpnx.infrastructure.app_config import AppConfig, VPNConfig
+from vpnx.infrastructure.config_parser import OpenVPNConfigParser
+from vpnx.infrastructure.log_reader import LogReader
+from vpnx.infrastructure.management import ManagementClient, ManagementState
+from vpnx.infrastructure.port_allocator import PortAllocator
+from vpnx.infrastructure.process import CommandRunner
+from vpnx.infrastructure.xdg import XDGPaths
+from vpnx.presentation.terminal import Terminal
 
 
 class Display(Protocol):
@@ -412,7 +412,7 @@ class SetupHandler(CommandHandler):
 
         if not self.store:
             # Import here to avoid circular dependency
-            from infrastructure.password_store import GPGPasswordStore
+            from vpnx.infrastructure.password_store import GPGPasswordStore
 
             self.store = GPGPasswordStore(self.config.credentials_path)
 

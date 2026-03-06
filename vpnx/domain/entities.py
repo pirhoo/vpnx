@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from domain.value_objects import Status, VPNType
+from vpnx.domain.value_objects import Status, VPNType
 
 
 @dataclass

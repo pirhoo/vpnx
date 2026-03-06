@@ -4,7 +4,7 @@ from abc import ABC
 from dataclasses import dataclass
 from typing import List
 
-from domain.value_objects import VPNType
+from vpnx.domain.value_objects import VPNType
 
 
 class Command(ABC):

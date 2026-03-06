@@ -4,7 +4,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
-from domain.services import CredentialStore
+from vpnx.domain.services import CredentialStore
 
 
 class GPGPasswordStore(CredentialStore):

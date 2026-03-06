@@ -3,8 +3,8 @@
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from domain.services import VPNRepository
-from domain.value_objects import VPNType
+from vpnx.domain.services import VPNRepository
+from vpnx.domain.value_objects import VPNType
 
 
 class FileVPNRepository(VPNRepository):

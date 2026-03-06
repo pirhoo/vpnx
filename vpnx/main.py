@@ -6,30 +6,27 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-# Add lib to path
-sys.path.insert(0, str(Path(__file__).parent / "lib"))
-
-from application import (
+from vpnx.application import (
     ConnectAllCommand,
     ConnectCommand,
     ListCommand,
     SetupCommand,
 )
-from application.handlers import (
+from vpnx.application.handlers import (
     ConnectAllHandler,
     ConnectHandler,
     SetupHandler,
 )
-from domain import VPNService
-from infrastructure import (
+from vpnx.domain import VPNService
+from vpnx.infrastructure import (
     CommandRunner,
     FileVPNRepository,
     OpenVPNProcessManager,
     PassPasswordStore,
 )
-from infrastructure.app_config import AppConfig
-from infrastructure.xdg import XDGPaths
-from presentation import CLI, TUI, ConsoleDisplay
+from vpnx.infrastructure.app_config import AppConfig
+from vpnx.infrastructure.xdg import XDGPaths
+from vpnx.presentation import CLI, TUI, ConsoleDisplay
 
 
 class Application:

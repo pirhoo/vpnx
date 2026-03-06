@@ -2,10 +2,10 @@
 
 from typing import List, Union
 
-from domain import BandwidthStats, Status, VPNState
-from domain.value_objects import VPNType
-from infrastructure.log_reader import LogReader
-from presentation.terminal import Terminal, visible_len
+from vpnx.domain import BandwidthStats, Status, VPNState
+from vpnx.domain.value_objects import VPNType
+from vpnx.infrastructure.log_reader import LogReader
+from vpnx.presentation.terminal import Terminal, visible_len
 
 BOX = {
     "tl": "╭",
@@ -208,7 +208,7 @@ class Box:
 
     def _truncate_ansi(self, content: str, max_len: int) -> str:
         """Truncate string preserving ANSI codes."""
-        from presentation.terminal import ANSI_RE
+        from vpnx.presentation.terminal import ANSI_RE
 
         parts, count, result = ANSI_RE.split(content), 0, []
         for i, part in enumerate(ANSI_RE.findall(content) + [""]):

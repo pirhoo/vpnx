@@ -18,7 +18,7 @@ except ImportError:
     YAML_AVAILABLE = False
 
 if TYPE_CHECKING:
-    from infrastructure.xdg import XDGPaths
+    from vpnx.infrastructure.xdg import XDGPaths
 
 
 @dataclass

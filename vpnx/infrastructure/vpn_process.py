@@ -3,9 +3,9 @@
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from domain.services import ProcessManager
-from domain.value_objects import ConnectionResult, Credentials, VPNType
-from infrastructure.process import CommandRunner
+from vpnx.domain.services import ProcessManager
+from vpnx.domain.value_objects import ConnectionResult, Credentials, VPNType
+from vpnx.infrastructure.process import CommandRunner
 
 ERROR_PATTERNS = [
     "Network is unreachable",
