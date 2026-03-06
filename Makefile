@@ -1,4 +1,4 @@
-.PHONY: help test lint format clean install setup list all connect coverage
+.PHONY: help test lint format clean install setup list all connect coverage bump-patch bump-minor bump-major
 
 PYTHON := python3
 SRC := vpnx
@@ -19,6 +19,11 @@ help:
 	@echo "  make format         Auto-format code"
 	@echo "  make clean          Remove cache files"
 	@echo "  make install        Check system dependencies"
+	@echo ""
+	@echo "Release:"
+	@echo "  make bump-patch     Bump patch version (0.1.0 -> 0.1.1)"
+	@echo "  make bump-minor     Bump minor version (0.1.0 -> 0.2.0)"
+	@echo "  make bump-major     Bump major version (0.1.0 -> 1.0.0)"
 
 test:
 	@$(PYTHON) -m unittest discover -s tests -v
@@ -77,3 +82,12 @@ ifndef VPN
 else
 	@$(PYTHON) -m vpnx connect $(VPN)
 endif
+
+bump-patch:
+	@bump-my-version bump patch
+
+bump-minor:
+	@bump-my-version bump minor
+
+bump-major:
+	@bump-my-version bump major
