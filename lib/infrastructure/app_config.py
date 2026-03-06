@@ -4,6 +4,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional
 
+
+def _opt_path(data: dict, key: str) -> Optional[Path]:
+    """Read an optional Path from a dict, expanding ~ if present."""
+    return Path(data[key]).expanduser() if data.get(key) else None
+
 try:
     import yaml
 
@@ -25,6 +30,8 @@ class VPNConfig:
     needs_up_script: bool = False
     needs_2fa: bool = True  # Most VPNs need 2FA
     up_script: Optional[Path] = None  # Per-VPN override
+    needs_down_script: bool = False
+    down_script: Optional[Path] = None  # Per-VPN override
 
     def to_dict(self) -> dict:
         """Convert to dictionary for YAML serialization."""
@@ -34,9 +41,12 @@ class VPNConfig:
             "config_path": str(self.config_path),
             "needs_up_script": self.needs_up_script,
             "needs_2fa": self.needs_2fa,
+            "needs_down_script": self.needs_down_script,
         }
         if self.up_script:
             data["up_script"] = str(self.up_script)
+        if self.down_script:
+            data["down_script"] = str(self.down_script)
         return data
 
     @classmethod
@@ -48,9 +58,9 @@ class VPNConfig:
             config_path=Path(data["config_path"]).expanduser(),
             needs_up_script=data.get("needs_up_script", False),
             needs_2fa=data.get("needs_2fa", True),
-            up_script=Path(data["up_script"]).expanduser()
-            if data.get("up_script")
-            else None,
+            up_script=_opt_path(data, "up_script"),
+            needs_down_script=data.get("needs_down_script", False),
+            down_script=_opt_path(data, "down_script"),
         )
 
 
@@ -61,6 +71,7 @@ class AppConfig:
     username: str
     credentials_path: Path  # Base path for credentials (adds .gpg and .gpg-id)
     up_script: Optional[Path]
+    down_script: Optional[Path] = None
     vpns: List[VPNConfig] = field(default_factory=list)
 
     def get_vpn(self, name: str) -> Optional[VPNConfig]:
@@ -97,6 +108,8 @@ class AppConfig:
         }
         if self.up_script:
             data["up_script"] = str(self.up_script)
+        if self.down_script:
+            data["down_script"] = str(self.down_script)
         return data
 
     def save(self, path: Path) -> None:
@@ -150,9 +163,8 @@ class AppConfig:
         return cls(
             username=data.get("username", ""),
             credentials_path=creds_path,
-            up_script=Path(data["up_script"]).expanduser()
-            if data.get("up_script")
-            else None,
+            up_script=_opt_path(data, "up_script"),
+            down_script=_opt_path(data, "down_script"),
             vpns=vpns,
         )
 
@@ -163,6 +175,7 @@ class AppConfig:
             username="",
             credentials_path=xdg.credentials_path,
             up_script=None,
+            down_script=None,
             vpns=[],
         )
 

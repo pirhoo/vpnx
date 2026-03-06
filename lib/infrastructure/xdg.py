@@ -50,6 +50,11 @@ class XDGPaths:
         """Path to the default up script."""
         return self.config_home / "up.sh"
 
+    @property
+    def down_script(self) -> Path:
+        """Path to the default down script."""
+        return self.config_home / "down.sh"
+
     def ensure_dirs(self) -> None:
         """Create all XDG directories if they don't exist."""
         self.config_home.mkdir(parents=True, exist_ok=True)
