@@ -27,11 +27,13 @@ class OpenVPNProcessManager(ProcessManager):
         runner: CommandRunner,
         config_dir: Optional[Path] = None,
         up_script: Optional[Path] = None,
+        down_script: Optional[Path] = None,
         config_paths: Optional[Dict[str, Path]] = None,
     ):
         self.runner = runner
         self.config_dir = config_dir
         self.up_script = up_script
+        self.down_script = down_script
         self.config_paths = config_paths or {}
 
     def _config_path(self, vpn_type: VPNType) -> Path:
@@ -51,12 +53,20 @@ class OpenVPNProcessManager(ProcessManager):
         vpn_type: VPNType,
         auth_file: Path,
         use_up_script: bool,
+        use_down_script: bool = False,
         management_port: Optional[int] = None,
     ) -> List[str]:
         """Build OpenVPN command."""
         cmd = ["sudo", "openvpn", "--config", str(self._config_path(vpn_type))]
+        needs_script_security = (use_up_script and self.up_script) or (
+            use_down_script and self.down_script
+        )
+        if needs_script_security:
+            cmd.extend(["--script-security", "2"])
         if use_up_script and self.up_script:
-            cmd.extend(["--script-security", "2", "--up", str(self.up_script)])
+            cmd.extend(["--up", str(self.up_script)])
+        if use_down_script and self.down_script:
+            cmd.extend(["--down", str(self.down_script)])
         if management_port:
             cmd.extend(["--management", "127.0.0.1", str(management_port)])
         cmd.extend(["--auth-user-pass", str(auth_file)])
@@ -68,12 +78,15 @@ class OpenVPNProcessManager(ProcessManager):
         credentials: Credentials,
         log_path: Path,
         use_up_script: bool,
+        use_down_script: bool = False,
         management_port: Optional[int] = None,
     ) -> None:
         """Start VPN connection in background."""
         auth_file = log_path.with_suffix(".auth")
         auth_file.write_text(credentials.auth_string)
-        cmd = self._build_command(vpn_type, auth_file, use_up_script, management_port)
+        cmd = self._build_command(
+            vpn_type, auth_file, use_up_script, use_down_script, management_port
+        )
         self.runner.start_background(cmd, str(log_path))
 
     def stop(self, vpn_type: VPNType) -> None:

@@ -33,6 +33,7 @@ class ProcessManager(ABC):
         credentials: Credentials,
         log_path: Path,
         use_up_script: bool,
+        use_down_script: bool = False,
         management_port: Optional[int] = None,
     ) -> None:
         """Start VPN connection."""
@@ -88,10 +89,12 @@ class VPNService:
         repository: VPNRepository,
         process_manager: ProcessManager,
         up_script_vpns: Optional[List[str]] = None,
+        down_script_vpns: Optional[List[str]] = None,
     ):
         self.repository = repository
         self.process_manager = process_manager
         self.up_script_vpns = up_script_vpns if up_script_vpns is not None else []
+        self.down_script_vpns = down_script_vpns if down_script_vpns is not None else []
 
     def list_vpns(self) -> List[VPNType]:
         return self.repository.list_available()
@@ -101,6 +104,9 @@ class VPNService:
 
     def needs_up_script(self, vpn_type: VPNType) -> bool:
         return vpn_type.name in self.up_script_vpns
+
+    def needs_down_script(self, vpn_type: VPNType) -> bool:
+        return vpn_type.name in self.down_script_vpns
 
     def connect(
         self,
@@ -115,6 +121,7 @@ class VPNService:
             credentials,
             log_path,
             self.needs_up_script(vpn_type),
+            self.needs_down_script(vpn_type),
             management_port,
         )
 
