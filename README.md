@@ -1,5 +1,14 @@
 # vpnx
 
+|      | Status |
+| ---: | :--- |
+| **CI checks** | [![CI](https://img.shields.io/github/actions/workflow/status/pirhoo/vpnx/ci.yml?style=flat-square)](https://github.com/pirhoo/vpnx/actions/workflows/ci.yml) |
+| **Latest version** | [![PyPI](https://img.shields.io/pypi/v/vpnx?style=flat-square&color=success)](https://pypi.org/project/vpnx/) |
+| **Release date** | [![Release date](https://img.shields.io/github/release-date/pirhoo/vpnx?style=flat-square&color=success)](https://github.com/pirhoo/vpnx/releases/latest) |
+| **Python** | [![Python](https://img.shields.io/pypi/pyversions/vpnx?style=flat-square)](https://pypi.org/project/vpnx/) |
+| **License** | [![License](https://img.shields.io/github/license/pirhoo/vpnx?style=flat-square)](https://github.com/pirhoo/vpnx/blob/main/LICENSE) |
+| **Open issues** | [![Open issues](https://img.shields.io/github/issues/pirhoo/vpnx?style=flat-square&color=success)](https://github.com/pirhoo/vpnx/issues) |
+
 A terminal UI for managing OpenVPN connections with 2FA support.
 
 <img width="1770" height="1451" alt="README" src="https://github.com/user-attachments/assets/b28c7b47-e6d0-44e2-a63f-57d7d5675e25" />
@@ -22,12 +31,7 @@ A terminal UI for managing OpenVPN connections with 2FA support.
 ## Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/user/vpnx.git
-cd vpnx
-
-# Verify system dependencies
-make install
+pip install vpnx
 ```
 
 ## Setup
@@ -49,7 +53,7 @@ The setup wizard will guide you through:
 make all
 
 # Connect to a specific VPN
-python3 run.py connect <vpn-name>
+vpnx connect <vpn-name>
 
 # List configured VPNs
 make list
@@ -105,12 +109,10 @@ make clean   # Remove cache files
 ## Project Structure
 
 ```
-├── lib/
+├── vpnx/
 │   ├── domain/          # Business logic (entities, services)
 │   ├── application/     # Use cases (commands, handlers)
-│   ├── infrastructure/  # External integrations (OpenVPN, pass)
+│   ├── infrastructure/  # External integrations (OpenVPN, GPG)
 │   └── presentation/    # UI components (TUI, CLI)
-├── tests/               # Unit tests
-├── certificates/        # VPN config files (local)
-└── scripts/             # Helper scripts (up.sh)
+└── tests/               # Unit tests
 ```
