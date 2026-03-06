@@ -1,9 +1,13 @@
 certificates/*
 !certificates/.gitkeep
 .claude
+scripts/
 
 # Python
 __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
+
+# macOS
+.DS_Store
