@@ -21,10 +21,10 @@ jobs:
         run: pip install ruff
 
       - name: Lint
-        run: ruff check lib run.py
+        run: ruff check vpnx
 
       - name: Format check
-        run: ruff format --check lib run.py
+        run: ruff format --check vpnx
 
   test:
     runs-on: ubuntu-latest
@@ -40,8 +40,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies
-        run: pip install pytest
+      - name: Install package
+        run: pip install -e .
 
       - name: Run tests
-        run: cd lib && python -m pytest ../tests -v
+        run: python -m pytest tests -v
