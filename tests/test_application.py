@@ -1,21 +1,18 @@
 #!/usr/bin/env python3
 """Tests for application layer."""
 
-import os
-import sys
 import unittest
 from unittest.mock import Mock
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
 
-from application.commands import (
+from vpnx.application.commands import (
     ConnectAllCommand,
     ConnectCommand,
     ListCommand,
     SetupCommand,
 )
-from application.handlers import ListHandler
-from domain.value_objects import VPNType
+from vpnx.application.handlers import ListHandler
+from vpnx.domain.value_objects import VPNType
 
 
 class TestCommands(unittest.TestCase):

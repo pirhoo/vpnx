@@ -2,20 +2,18 @@
 """Tests for infrastructure layer."""
 
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
 
 from unittest.mock import Mock, patch
 
-from domain.value_objects import VPNType
-from infrastructure.log_reader import LogReader
-from infrastructure.password_store import GPGPasswordStore
-from infrastructure.process import CommandResult, CommandRunner
-from infrastructure.vpn_repository import FileVPNRepository
+from vpnx.domain.value_objects import VPNType
+from vpnx.infrastructure.log_reader import LogReader
+from vpnx.infrastructure.password_store import GPGPasswordStore
+from vpnx.infrastructure.process import CommandResult, CommandRunner
+from vpnx.infrastructure.vpn_repository import FileVPNRepository
 
 
 class TestCommandResult(unittest.TestCase):

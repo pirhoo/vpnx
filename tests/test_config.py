@@ -2,15 +2,13 @@
 """Tests for application configuration."""
 
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
 
-from infrastructure.app_config import AppConfig, VPNConfig
-from infrastructure.xdg import XDGPaths
+from vpnx.infrastructure.app_config import AppConfig, VPNConfig
+from vpnx.infrastructure.xdg import XDGPaths
 
 
 class TestVPNConfig(unittest.TestCase):

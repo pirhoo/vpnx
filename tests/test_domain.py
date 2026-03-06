@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
 """Tests for domain layer."""
 
-import os
-import sys
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
 
-from domain.entities import BandwidthStats, VPNConnection, VPNState
-from domain.value_objects import ConnectionResult, Credentials, Status, VPNType
+from vpnx.domain.entities import BandwidthStats, VPNConnection, VPNState
+from vpnx.domain.value_objects import ConnectionResult, Credentials, Status, VPNType
 
 
 class TestStatus(unittest.TestCase):

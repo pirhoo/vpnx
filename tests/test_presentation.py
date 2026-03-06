@@ -2,23 +2,21 @@
 """Tests for presentation layer."""
 
 import os
-import sys
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
 
 os.environ["NO_COLOR"] = "1"
 
-from application.commands import (
+from vpnx.application.commands import (
     ConnectAllCommand,
     ConnectCommand,
     ListCommand,
     SetupCommand,
 )
-from domain import BandwidthStats, Status, VPNState
-from presentation.cli import CLI
-from presentation.terminal import Terminal, strip_ansi, visible_len
-from presentation.tui import (
+from vpnx.domain import BandwidthStats, Status, VPNState
+from vpnx.presentation.cli import CLI
+from vpnx.presentation.terminal import Terminal, strip_ansi, visible_len
+from vpnx.presentation.tui import (
     SPINNER,
     STATUS_CONFIG,
     TUI,
@@ -390,7 +388,7 @@ class TestTUIBandwidth(unittest.TestCase):
         self.assertNotIn("B/s", result)
 
     def test_render_single_with_bandwidth(self):
-        from domain.value_objects import VPNType
+        from vpnx.domain.value_objects import VPNType
 
         state = VPNState()
         state.get_bandwidth(VPNType("PROD")).total_in = 1000
@@ -399,7 +397,7 @@ class TestTUIBandwidth(unittest.TestCase):
         self.assertIn("B/s", result)
 
     def test_render_single_with_bandwidth_shows_status_icon(self):
-        from domain.value_objects import VPNType
+        from vpnx.domain.value_objects import VPNType
 
         state = VPNState()
         state.get_bandwidth(VPNType("PROD")).total_in = 1000
@@ -415,7 +413,7 @@ class TestTUISingle(unittest.TestCase):
         self.tui = TUI()
 
     def test_render_single_includes_status(self):
-        from domain.value_objects import VPNType
+        from vpnx.domain.value_objects import VPNType
 
         state = VPNState()
         state.set_status(VPNType("PROD"), Status.CONNECTED)
@@ -505,7 +503,7 @@ class TestTUITwo(unittest.TestCase):
                 self.assertEqual(len(stripped), 80)
 
     def test_render_two_with_bandwidth(self):
-        from domain.value_objects import VPNType
+        from vpnx.domain.value_objects import VPNType
 
         state = VPNState()
         state.initialize(["PROD", "DEV"])
