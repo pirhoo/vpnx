@@ -3,6 +3,7 @@
 import getpass
 import os
 import signal
+import stat
 import threading
 import time
 from abc import ABC, abstractmethod
@@ -195,6 +196,74 @@ class SetupHandler(CommandHandler):
         else:
             self.display.print("  Credentials: not set (will prompt)")
 
+    def _ask_script_path(self, label: str, current: Optional[Path] = None) -> Optional[Path]:
+        """Prompt for a script path, validate it exists and is executable."""
+        default_hint = f" [{current}]" if current else ""
+        path_str = self.display.input(
+            f"{label} path{default_hint}: "
+        ).strip()
+        if not path_str and current:
+            path = current
+        elif not path_str:
+            self.display.print(f"  No {label} path provided, skipping.")
+            return None
+        else:
+            path = Path(path_str).expanduser()
+
+        if not path.exists():
+            self.display.print(f"  Warning: {label} not found at: {path}")
+            confirm = self.display.input("  Continue anyway? [y/N]: ").strip().lower()
+            if confirm != "y":
+                return None
+            return path
+
+        if not os.access(path, os.X_OK):
+            self.display.print(
+                f"  Warning: {label} is not executable: {path}"
+            )
+            response = (
+                self.display.input("  Make it executable now? [Y/n]: ")
+                .strip()
+                .lower()
+            )
+            if response != "n":
+                path.chmod(
+                    path.stat().st_mode
+                    | stat.S_IXUSR
+                    | stat.S_IXGRP
+                    | stat.S_IXOTH
+                )
+                self.display.print(f"  Made executable: {path}")
+
+        return path
+
+    def _ask_yn_toggle(self, prompt: str, current: bool) -> bool:
+        """Ask a y/n question with a default from the current value."""
+        default = "Y" if current else "N"
+        answer = (
+            self.display.input(f"{prompt} [y/n] ({default}): ").strip().lower()
+        )
+        if answer == "y":
+            return True
+        if answer == "n":
+            return False
+        return current
+
+    def _ask_script(
+        self, label: str, needs: bool, current_path: Optional[Path] = None
+    ) -> tuple:
+        """Ask if a script is needed; if yes, prompt for its path.
+
+        Returns (needs_script, script_path).
+        """
+        needs = self._ask_yn_toggle(f"Needs {label}?", needs)
+        script_path = current_path
+        if needs:
+            script_path = self._ask_script_path(label, current_path)
+            if not script_path:
+                needs = False
+        return needs, script_path
+
     def _add_vpn(self) -> None:
         """Interactive VPN addition wizard."""
         self.display.print("\nAdd VPN")
@@ -223,7 +292,8 @@ class SetupHandler(CommandHandler):
             if confirm != "y":
                 return
 
-        needs_up = self.display.input("Needs up script? [y/N]: ").strip().lower() == "y"
+        needs_up, up_script = self._ask_script("up script", False)
+        needs_down, down_script = self._ask_script("down script", False)
         needs_2fa = self.display.input("Needs 2FA? [Y/n]: ").strip().lower() != "n"
 
         vpn = VPNConfig(
@@ -231,6 +301,9 @@ class SetupHandler(CommandHandler):
             display_name=display_name,
             config_path=config_path,
             needs_up_script=needs_up,
+            up_script=up_script,
+            needs_down_script=needs_down,
+            down_script=down_script,
             needs_2fa=needs_2fa,
         )
         self.config.add_vpn(vpn)
@@ -270,39 +343,23 @@ class SetupHandler(CommandHandler):
         ).strip() or str(old_vpn.config_path)
         config_path = Path(config_path_str).expanduser()
 
-        needs_default = "Y" if old_vpn.needs_up_script else "N"
-        needs_up_str = (
-            self.display.input(f"Needs up script? [y/n] ({needs_default}): ")
-            .strip()
-            .lower()
+        needs_up, up_script = self._ask_script(
+            "up script", old_vpn.needs_up_script, old_vpn.up_script
         )
-        if needs_up_str == "y":
-            needs_up = True
-        elif needs_up_str == "n":
-            needs_up = False
-        else:
-            needs_up = old_vpn.needs_up_script
-
-        needs_2fa_default = "Y" if old_vpn.needs_2fa else "N"
-        needs_2fa_str = (
-            self.display.input(f"Needs 2FA? [y/n] ({needs_2fa_default}): ")
-            .strip()
-            .lower()
+        needs_down, down_script = self._ask_script(
+            "down script", old_vpn.needs_down_script, old_vpn.down_script
         )
-        if needs_2fa_str == "y":
-            needs_2fa = True
-        elif needs_2fa_str == "n":
-            needs_2fa = False
-        else:
-            needs_2fa = old_vpn.needs_2fa
+        needs_2fa = self._ask_yn_toggle("Needs 2FA?", old_vpn.needs_2fa)
 
         new_vpn = VPNConfig(
             name=old_vpn.name,
             display_name=display_name,
             config_path=config_path,
             needs_up_script=needs_up,
+            up_script=up_script,
+            needs_down_script=needs_down,
+            down_script=down_script,
             needs_2fa=needs_2fa,
-            up_script=old_vpn.up_script,
         )
         self.config.vpns[idx] = new_vpn
         self.modified = True
