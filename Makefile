@@ -1,7 +1,7 @@
 .PHONY: help test lint format clean install setup list all connect coverage
 
 PYTHON := python3
-SRC := lib run.py
+SRC := vpnx
 
 help:
 	@echo "vpnx - VPN Client"
@@ -21,10 +21,10 @@ help:
 	@echo "  make install        Check system dependencies"
 
 test:
-	@cd lib && $(PYTHON) -m unittest discover -s ../tests -v
+	@$(PYTHON) -m unittest discover -s tests -v
 
 coverage:
-	@$(PYTHON) -m pytest --cov=lib --cov-report=term-missing tests/
+	@$(PYTHON) -m pytest --cov=vpnx --cov-report=term-missing tests/
 
 lint:
 	@ruff check $(SRC) && ruff format --check $(SRC) && echo "Lint OK"
@@ -33,8 +33,8 @@ format:
 	@ruff check --fix $(SRC) && ruff format $(SRC) && echo "Format OK"
 
 clean:
-	@rm -rf __pycache__ lib/__pycache__ tests/__pycache__
-	@rm -rf lib/**/__pycache__
+	@rm -rf __pycache__ vpnx/__pycache__ tests/__pycache__
+	@rm -rf vpnx/**/__pycache__
 	@rm -rf .pytest_cache .coverage htmlcov
 	@find . -name "*.pyc" -delete
 	@echo "Cleaned"
@@ -62,18 +62,18 @@ install:
 	fi
 
 setup:
-	@$(PYTHON) run.py setup
+	@$(PYTHON) -m vpnx setup
 
 list:
-	@$(PYTHON) run.py list
+	@$(PYTHON) -m vpnx list
 
 all:
-	@$(PYTHON) run.py all
+	@$(PYTHON) -m vpnx all
 
 connect:
 ifndef VPN
 	@echo "Usage: make connect VPN=<name>"
 	@echo "Run 'make list' to see configured VPNs"
 else
-	@$(PYTHON) run.py connect $(VPN)
+	@$(PYTHON) -m vpnx connect $(VPN)
 endif
