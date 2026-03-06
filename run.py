@@ -68,22 +68,32 @@ class Application:
         # Build config_paths mapping from VPN configs
         config_paths = {vpn.name: vpn.config_path for vpn in self.config.vpns}
 
-        # Get VPNs that need up script
+        # Get VPNs that need up/down scripts
         up_script_vpns = [v.name for v in self.config.vpns if v.needs_up_script]
+        down_script_vpns = [v.name for v in self.config.vpns if v.needs_down_script]
 
-        # Determine up_script path (config > project default > XDG default)
-        project_root = Path(__file__).parent
-        default_up_script = project_root / "scripts" / "up.sh"
-        up_script = self.config.up_script or (
-            default_up_script if default_up_script.exists() else self.xdg.up_script
+        def resolve_script(global_path, vpns):
+            path = global_path or next(
+                (v for v in vpns if v), None
+            )
+            return path if path and path.exists() else None
+
+        up_script = resolve_script(
+            self.config.up_script,
+            (v.up_script for v in self.config.vpns),
         )
-        if up_script and not up_script.exists():
-            up_script = None
+        down_script = resolve_script(
+            self.config.down_script,
+            (v.down_script for v in self.config.vpns),
+        )
 
         # Infrastructure with config_paths
         self.repository = FileVPNRepository(config_paths=config_paths)
         self.process_manager = OpenVPNProcessManager(
-            self.runner, up_script=up_script, config_paths=config_paths
+            self.runner,
+            up_script=up_script,
+            down_script=down_script,
+            config_paths=config_paths,
         )
 
         # Password store (might not be initialized)
@@ -91,7 +101,7 @@ class Application:
 
         # Domain service
         self.vpn_service = VPNService(
-            self.repository, self.process_manager, up_script_vpns
+            self.repository, self.process_manager, up_script_vpns, down_script_vpns
         )
 
     def check_dependencies(self) -> bool:
