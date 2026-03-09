@@ -31,6 +31,20 @@ A terminal UI for managing OpenVPN connections with 2FA support.
 - openvpn
 - gpg (for encrypted password storage)
 
+```bash
+# macOS
+brew install openvpn gnupg
+
+# Debian/Ubuntu
+sudo apt install openvpn gnupg
+
+# Fedora
+sudo dnf install openvpn gnupg2
+
+# Arch
+sudo pacman -S openvpn gnupg
+```
+
 ## Installation
 
 ```bash
