@@ -103,19 +103,26 @@ Configuration is stored in XDG-compliant directories:
 ### config.yaml format
 
 ```yaml
-username: your-username
-credentials_path: ~/.local/share/vpnx/credentials
-up_script: /path/to/up.sh  # Optional global up script
+username: your-username                            # optional, will prompt if not set
+credentials_path: ~/.local/share/vpnx/credentials  # path to GPG-encrypted password
+up_script: /path/to/up.sh                          # optional, global up script
+down_script: /path/to/down.sh                      # optional, global down script
 
 vpns:
   - name: PROD
     display: Production VPN
     config_path: /path/to/prod.ovpn
     needs_up_script: true
+    up_script: /path/to/prod-up.sh      # optional, per-VPN override
+    needs_down_script: true
+    down_script: /path/to/prod-down.sh  # optional, per-VPN override
+    needs_2fa: true                     # default: true
   - name: DEV
     display: Development VPN
     config_path: /path/to/dev.ovpn
     needs_up_script: false
+    needs_down_script: false
+    needs_2fa: false
 ```
 
 ## Build from source
