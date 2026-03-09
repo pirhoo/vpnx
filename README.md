@@ -40,12 +40,11 @@ pip install vpnx
 ## Setup
 
 ```bash
-# Run the interactive setup wizard
-make setup
+vpnx setup
 ```
 
 The setup wizard will guide you through:
-1. Adding VPN configurations (name, path to .ovpn file, up script requirement)
+1. Adding VPN configurations (name, path to .ovpn file, up/down scripts)
 2. Setting your username (optional - will prompt at connection if not set)
 3. Configuring the password store (GPG key for secure credential storage)
 
@@ -53,16 +52,13 @@ The setup wizard will guide you through:
 
 ```bash
 # Connect to all configured VPNs
-make all
+vpnx all
 
 # Connect to a specific VPN
 vpnx connect <vpn-name>
 
 # List configured VPNs
-make list
-
-# Re-run setup to modify configuration
-make setup
+vpnx list
 ```
 
 ## Configuration
