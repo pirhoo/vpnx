@@ -96,13 +96,26 @@ vpns:
     needs_up_script: false
 ```
 
-## Development
+## Build from source
 
 ```bash
-make test    # Run tests
-make lint    # Check code style
-make format  # Auto-format code
-make clean   # Remove cache files
+git clone https://github.com/pirhoo/vpnx.git
+cd vpnx
+pip install -e ".[dev]"
+```
+
+Then use `make` targets to run the project and development tasks:
+
+```bash
+make setup          # Configure VPN client
+make all            # Connect to all configured VPNs
+make connect VPN=x  # Connect to a specific VPN
+make list           # List configured VPNs
+
+make test           # Run tests
+make lint           # Check code style
+make format         # Auto-format code
+make clean          # Remove cache files
 ```
 
 ## Project Structure
