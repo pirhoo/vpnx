@@ -47,6 +47,14 @@ sudo pacman -S openvpn gnupg
 
 ## Installation
 
+Using [pipx](https://pipx.pypa.io/) (recommended):
+
+```bash
+pipx install vpnx
+```
+
+Or with pip:
+
 ```bash
 pip install vpnx
 ```
