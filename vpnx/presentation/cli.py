@@ -24,7 +24,7 @@ class CLI:
         self.parser = self._build_parser()
 
     def _build_parser(self) -> argparse.ArgumentParser:
-        parser = argparse.ArgumentParser(prog="vpn", description="VPN client")
+        parser = argparse.ArgumentParser(prog="vpnx", description="VPN client")
         parser.add_argument("-v", "--version", action="version", version=VERSION)
 
         sub = parser.add_subparsers(dest="cmd")
