@@ -2,9 +2,11 @@
 """Tests for domain layer."""
 
 import unittest
-
+from pathlib import Path
+from unittest.mock import Mock
 
 from vpnx.domain.entities import BandwidthStats, VPNConnection, VPNState
+from vpnx.domain.services import VPNService
 from vpnx.domain.value_objects import ConnectionResult, Credentials, Status, VPNType
 
 
@@ -284,6 +286,32 @@ class TestBandwidthStats(unittest.TestCase):
         # Same bytes - should not add to history
         stats.update(2000, 1000, 10.0)
         self.assertEqual(len(stats.history_in), 1)  # Still 1
+
+
+class TestVPNServiceConnect(unittest.TestCase):
+    """Tests for VPNService.connect() tun_mtu propagation."""
+
+    def setUp(self):
+        self.repository = Mock()
+        self.process_manager = Mock()
+        self.service = VPNService(self.repository, self.process_manager, [], [])
+        self.vpn_type = VPNType("EXT")
+        self.credentials = Credentials("user", "pass")
+        self.log_path = Path("/tmp/vpn.log")
+
+    def test_connect_passes_tun_mtu_to_process_manager(self):
+        self.service.connect(
+            self.vpn_type, self.credentials, self.log_path, tun_mtu=1400
+        )
+        _, kwargs = self.process_manager.start.call_args
+        args = self.process_manager.start.call_args[0]
+        # tun_mtu is the last positional arg
+        self.assertEqual(args[-1], 1400)
+
+    def test_connect_passes_none_tun_mtu_by_default(self):
+        self.service.connect(self.vpn_type, self.credentials, self.log_path)
+        args = self.process_manager.start.call_args[0]
+        self.assertIsNone(args[-1])
 
 
 if __name__ == "__main__":
