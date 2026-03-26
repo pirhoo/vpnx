@@ -35,6 +35,7 @@ class ProcessManager(ABC):
         use_up_script: bool,
         use_down_script: bool = False,
         management_port: Optional[int] = None,
+        tun_mtu: Optional[int] = None,
     ) -> None:
         """Start VPN connection."""
 
@@ -114,6 +115,7 @@ class VPNService:
         credentials: Credentials,
         log_path: Path,
         management_port: Optional[int] = None,
+        tun_mtu: Optional[int] = None,
     ) -> None:
         """Start VPN connection."""
         self.process_manager.start(
@@ -123,6 +125,7 @@ class VPNService:
             self.needs_up_script(vpn_type),
             self.needs_down_script(vpn_type),
             management_port,
+            tun_mtu
         )
 
     def disconnect(self, vpn_type: VPNType) -> None:
