@@ -55,9 +55,12 @@ class OpenVPNProcessManager(ProcessManager):
         use_up_script: bool,
         use_down_script: bool = False,
         management_port: Optional[int] = None,
+        tun_mtu: Optional[int] = None,
     ) -> List[str]:
         """Build OpenVPN command."""
         cmd = ["sudo", "openvpn", "--config", str(self._config_path(vpn_type))]
+        if tun_mtu:
+            cmd.extend(["--tun-mtu", str(tun_mtu)])
         needs_script_security = (use_up_script and self.up_script) or (
             use_down_script and self.down_script
         )
@@ -80,12 +83,13 @@ class OpenVPNProcessManager(ProcessManager):
         use_up_script: bool,
         use_down_script: bool = False,
         management_port: Optional[int] = None,
+        tun_mtu: Optional[int] = None,
     ) -> None:
         """Start VPN connection in background."""
         auth_file = log_path.with_suffix(".auth")
         auth_file.write_text(credentials.auth_string)
         cmd = self._build_command(
-            vpn_type, auth_file, use_up_script, use_down_script, management_port
+            vpn_type, auth_file, use_up_script, use_down_script, management_port, tun_mtu
         )
         self.runner.start_background(cmd, str(log_path))
 
