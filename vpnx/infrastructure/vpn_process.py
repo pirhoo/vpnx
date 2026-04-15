@@ -59,7 +59,7 @@ class OpenVPNProcessManager(ProcessManager):
     ) -> List[str]:
         """Build OpenVPN command."""
         cmd = ["sudo", "openvpn", "--config", str(self._config_path(vpn_type))]
-        if tun_mtu:
+        if tun_mtu is not None:
             cmd.extend(["--tun-mtu", str(tun_mtu)])
         needs_script_security = (use_up_script and self.up_script) or (
             use_down_script and self.down_script
