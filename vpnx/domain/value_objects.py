@@ -23,6 +23,26 @@ class ConnectionResult(Enum):
 
 
 @dataclass(frozen=True)
+class TunMTU:
+    """TUN MTU value object with validation. The practical working range is [1200 - 1500] bytes"""
+
+    MIN = 1200
+    MAX = 1500
+
+    value: int
+
+    def __post_init__(self):
+        if not (self.MIN <= self.value <= self.MAX):
+            raise ValueError(f"tun_mtu must be between {self.MIN} and {self.MAX}")
+
+    def __int__(self) -> int:
+        return self.value
+
+    def __str__(self) -> str:
+        return str(self.value)
+
+
+@dataclass(frozen=True)
 class VPNType:
     """VPN type identifier (immutable)."""
 
