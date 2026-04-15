@@ -7,7 +7,13 @@ from vpnx.domain.services import (
     VPNRepository,
     VPNService,
 )
-from vpnx.domain.value_objects import ConnectionResult, Credentials, Status, VPNType
+from vpnx.domain.value_objects import (
+    ConnectionResult,
+    Credentials,
+    Status,
+    TunMTU,
+    VPNType,
+)
 
 __all__ = [
     "VPNState",
@@ -21,4 +27,5 @@ __all__ = [
     "VPNRepository",
     "ProcessManager",
     "CredentialStore",
+    "TunMTU",
 ]
