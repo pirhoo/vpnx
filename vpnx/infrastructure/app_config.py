@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional
 
+from vpnx.domain.value_objects import MAX_TUN_MTU, MIN_TUN_MTU
+
 
 def _opt_path(data: dict, key: str) -> Optional[Path]:
     """Read an optional Path from a dict, expanding ~ if present."""
@@ -35,6 +37,13 @@ class VPNConfig:
     down_script: Optional[Path] = None  # Per-VPN override
     tun_mtu: Optional[int] = None  # Per-VPN override
 
+    def __post_init__(self):
+        if self.tun_mtu is not None:
+            if not (MIN_TUN_MTU <= self.tun_mtu <= MAX_TUN_MTU):
+                raise ValueError(
+                    f"tun_mtu must be between {MIN_TUN_MTU} and {MAX_TUN_MTU}"
+                )
+
     def to_dict(self) -> dict:
         """Convert to dictionary for YAML serialization."""
         data = {
@@ -49,7 +58,7 @@ class VPNConfig:
             data["up_script"] = str(self.up_script)
         if self.down_script:
             data["down_script"] = str(self.down_script)
-        if self.tun_mtu:
+        if self.tun_mtu is not None:
             data["tun_mtu"] = int(self.tun_mtu)
         return data
 
