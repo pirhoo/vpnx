@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional
 
+from vpnx.domain.value_objects import TunMTU
+
 
 def _opt_path(data: dict, key: str) -> Optional[Path]:
     """Read an optional Path from a dict, expanding ~ if present."""
@@ -33,6 +35,7 @@ class VPNConfig:
     up_script: Optional[Path] = None  # Per-VPN override
     needs_down_script: bool = False
     down_script: Optional[Path] = None  # Per-VPN override
+    tun_mtu: Optional[TunMTU] = None  # Per-VPN override
 
     def to_dict(self) -> dict:
         """Convert to dictionary for YAML serialization."""
@@ -48,11 +51,21 @@ class VPNConfig:
             data["up_script"] = str(self.up_script)
         if self.down_script:
             data["down_script"] = str(self.down_script)
+        if self.tun_mtu is not None:
+            data["tun_mtu"] = int(self.tun_mtu)
         return data
 
     @classmethod
     def from_dict(cls, data: dict) -> "VPNConfig":
         """Create from dictionary."""
+        tun_mtu_val = data.get("tun_mtu")
+        tun_mtu = None
+        if tun_mtu_val is not None:
+            try:
+                tun_mtu = TunMTU(int(tun_mtu_val))
+            except (ValueError, TypeError) as e:
+                # Re-raise as ValueError with clean message if it's not a valid integer or out of range
+                raise ValueError(f"Invalid tun_mtu value '{tun_mtu_val}': {e}")
         return cls(
             name=data["name"].upper(),
             display_name=data.get("display", data["name"]),
@@ -62,6 +75,7 @@ class VPNConfig:
             up_script=_opt_path(data, "up_script"),
             needs_down_script=data.get("needs_down_script", False),
             down_script=_opt_path(data, "down_script"),
+            tun_mtu=tun_mtu,
         )
 
 

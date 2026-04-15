@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 
-from vpnx.infrastructure.app_config import AppConfig, VPNConfig
+from vpnx.infrastructure.app_config import AppConfig, VPNConfig, TunMTU
 from vpnx.infrastructure.xdg import XDGPaths
 
 
@@ -22,6 +22,7 @@ class TestVPNConfig(unittest.TestCase):
         self.assertEqual(vpn.display_name, "External")
         self.assertEqual(vpn.config_path, Path("/etc/vpn/ext.ovpn"))
         self.assertFalse(vpn.needs_up_script)
+        self.assertIsNone(vpn.tun_mtu)
 
     def test_create_with_up_script(self):
         vpn = VPNConfig(
@@ -38,12 +39,33 @@ class TestVPNConfig(unittest.TestCase):
             display_name="External",
             config_path=Path("/etc/vpn/ext.ovpn"),
             needs_up_script=True,
+            tun_mtu=TunMTU(1400)
         )
         data = vpn.to_dict()
         self.assertEqual(data["name"], "EXT")
         self.assertEqual(data["display"], "External")
         self.assertEqual(data["config_path"], "/etc/vpn/ext.ovpn")
         self.assertTrue(data["needs_up_script"])
+        self.assertEqual(data["tun_mtu"], 1400)
+
+    def test_from_dict_with_tun_mtu_as_string(self):
+        data = {
+            "name": "ext",
+            "display": "External",
+            "config_path": "/etc/vpn/ext.ovpn",
+            "tun_mtu": "1400",
+        }
+        vpn = VPNConfig.from_dict(data)
+        self.assertEqual(vpn.tun_mtu, TunMTU(1400))
+
+    def test_from_dict_with_invalid_tun_mtu_string(self):
+        data = {
+            "name": "ext",
+            "config_path": "/etc/vpn/ext.ovpn",
+            "tun_mtu": "not-an-int",
+        }
+        with self.assertRaises(ValueError):
+            VPNConfig.from_dict(data)
 
     def test_from_dict(self):
         data = {
@@ -51,12 +73,14 @@ class TestVPNConfig(unittest.TestCase):
             "display": "External",
             "config_path": "/etc/vpn/ext.ovpn",
             "needs_up_script": True,
+            "tun_mtu": 1300,
         }
         vpn = VPNConfig.from_dict(data)
         self.assertEqual(vpn.name, "EXT")  # Uppercase
         self.assertEqual(vpn.display_name, "External")
         self.assertEqual(vpn.config_path, Path("/etc/vpn/ext.ovpn"))
         self.assertTrue(vpn.needs_up_script)
+        self.assertEqual(vpn.tun_mtu, TunMTU(1300))
 
 
 class TestAppConfig(unittest.TestCase):
@@ -265,6 +289,65 @@ class TestAppConfigSaveLoad(unittest.TestCase):
             self.assertEqual(len(loaded.vpns), 1)
             self.assertEqual(loaded.vpns[0].name, "EXT")
             self.assertTrue(loaded.vpns[0].needs_up_script)
+
+    def test_save_and_load_with_tun_mtu(self):
+        try:
+            import yaml  # noqa: F401
+        except ImportError:
+            self.skipTest("PyYAML not installed")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.yaml"
+            config = AppConfig(
+                username="john",
+                credentials_path=Path("/tmp/creds"),
+                up_script=None,
+                vpns=[
+                    VPNConfig(
+                        name="EXT",
+                        display_name="External",
+                        config_path=Path("/etc/vpn/ext.ovpn"),
+                        tun_mtu=TunMTU(1400),
+                    )
+                ],
+            )
+            config.save(config_path)
+            loaded = AppConfig.load(config_path)
+            self.assertEqual(loaded.vpns[0].tun_mtu, TunMTU(1400))
+
+    def test_save_and_load_tun_mtu_none_not_written(self):
+        try:
+            import yaml
+        except ImportError:
+            self.skipTest("PyYAML not installed")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.yaml"
+            config = AppConfig(
+                username="john",
+                credentials_path=Path("/tmp/creds"),
+                up_script=None,
+                vpns=[
+                    VPNConfig(
+                        name="EXT",
+                        display_name="External",
+                        config_path=Path("/etc/vpn/ext.ovpn"),
+                    )
+                ],
+            )
+            config.save(config_path)
+            with open(config_path) as f:
+                raw = yaml.safe_load(f)
+            self.assertNotIn("tun_mtu", raw["vpns"][0])
+
+    def test_save_and_load_with_tun_mtu_invalid(self):
+        try:
+            import yaml
+        except ImportError:
+            self.skipTest("PyYAML not installed")
+
+        with self.assertRaisesRegex(ValueError, f"tun_mtu must be between {TunMTU.MIN} and {TunMTU.MAX}"):
+            TunMTU(TunMTU.MIN - 1)
 
     def test_empty_config(self):
         xdg = XDGPaths(

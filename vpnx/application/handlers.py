@@ -17,7 +17,14 @@ from vpnx.application.commands import (
     ListCommand,
     SetupCommand,
 )
-from vpnx.domain import ConnectionResult, Credentials, Status, VPNState, VPNType
+from vpnx.domain import (
+    ConnectionResult,
+    Credentials,
+    Status,
+    TunMTU,
+    VPNState,
+    VPNType,
+)
 from vpnx.domain.services import CredentialStore, VPNService
 from vpnx.infrastructure.app_config import AppConfig, VPNConfig
 from vpnx.infrastructure.config_parser import OpenVPNConfigParser
@@ -287,6 +294,16 @@ class SetupHandler(CommandHandler):
         needs_down, down_script = self._ask_script("down script", False)
         needs_2fa = self.display.input("Needs 2FA? [Y/n]: ").strip().lower() != "n"
 
+        tun_mtu: Optional[TunMTU] = None
+        tun_mtu_str = self.display.input(
+            f"Custom tun-mtu value ({TunMTU.MIN}-{TunMTU.MAX}) [default]: "
+        ).strip()
+        if tun_mtu_str:
+            try:
+                tun_mtu = TunMTU(int(tun_mtu_str))
+            except ValueError as e:
+                self.display.error(f"Invalid tun-mtu value: {e}. Ignoring.")
+
         vpn = VPNConfig(
             name=name,
             display_name=display_name,
@@ -296,6 +313,7 @@ class SetupHandler(CommandHandler):
             needs_down_script=needs_down,
             down_script=down_script,
             needs_2fa=needs_2fa,
+            tun_mtu=tun_mtu,
         )
         self.config.add_vpn(vpn)
         self.modified = True
@@ -342,6 +360,18 @@ class SetupHandler(CommandHandler):
         )
         needs_2fa = self._ask_yn_toggle("Needs 2FA?", old_vpn.needs_2fa)
 
+        tun_mtu: Optional[TunMTU] = old_vpn.tun_mtu
+        current_mtu = str(old_vpn.tun_mtu) if old_vpn.tun_mtu is not None else ""
+        prompt = f"Custom tun-mtu value ({TunMTU.MIN}-{TunMTU.MAX}) [{current_mtu}] (leave empty to keep, 'none' to clear): "
+        tun_mtu_str = self.display.input(prompt).strip()
+        if tun_mtu_str.lower() == "none":
+            tun_mtu = None
+        elif tun_mtu_str:
+            try:
+                tun_mtu = TunMTU(int(tun_mtu_str))
+            except ValueError as e:
+                self.display.error(f"Invalid tun-mtu value: {e}. Keeping previous.")
+
         new_vpn = VPNConfig(
             name=old_vpn.name,
             display_name=display_name,
@@ -351,6 +381,7 @@ class SetupHandler(CommandHandler):
             needs_down_script=needs_down,
             down_script=down_script,
             needs_2fa=needs_2fa,
+            tun_mtu=tun_mtu,
         )
         self.config.vpns[idx] = new_vpn
         self.modified = True
@@ -494,6 +525,7 @@ class ConnectHandler(CommandHandler):
         display: Display,
         config_dir: Path,
         needs_2fa: bool = True,
+        tun_mtu: Optional[int] = None,
     ):
         self.service = service
         self.store = store
@@ -503,6 +535,7 @@ class ConnectHandler(CommandHandler):
         self.display = display
         self.config_dir = config_dir
         self.needs_2fa = needs_2fa
+        self.tun_mtu = tun_mtu
         self.state = VPNState()
         self.log_path: Optional[Path] = None
         self.management_port: Optional[int] = None
@@ -563,7 +596,11 @@ class ConnectHandler(CommandHandler):
                 return False
 
             self.service.connect(
-                self.vpn_type, credentials, self.log_path, self.management_port
+                self.vpn_type,
+                credentials,
+                self.log_path,
+                self.management_port,
+                self.tun_mtu,
             )
             result = self._wait_for_connection()
 
@@ -865,6 +902,7 @@ class ConnectAllHandler(CommandHandler):
         config_paths: Dict[str, Path],
         vpn_types: List[VPNType],
         needs_2fa: Optional[Dict[str, bool]] = None,
+        tun_mtu: Optional[Dict[str, int]] = None,
     ):
         self.service = service
         self.store = store
@@ -876,6 +914,7 @@ class ConnectAllHandler(CommandHandler):
         self.vpn_types = vpn_types
         self.vpn_names = [v.name for v in vpn_types]
         self.needs_2fa = needs_2fa or {}  # Default to empty dict (all need 2FA)
+        self.tun_mtu = tun_mtu or {}
         self.state = VPNState()
         self.state.initialize(self.vpn_names)
         self.logs: Dict[str, Optional[Path]] = {name: None for name in self.vpn_names}
@@ -948,7 +987,9 @@ class ConnectAllHandler(CommandHandler):
             if not credentials:
                 return False
 
-            self.service.connect(vpn_type, credentials, log, management_port)
+            tun_mtu = self.tun_mtu.get(vpn_type.name)
+
+            self.service.connect(vpn_type, credentials, log, management_port, tun_mtu)
             result = self._wait_for_connection(vpn_type, log)
 
             if result == ConnectionResult.CONNECTED:

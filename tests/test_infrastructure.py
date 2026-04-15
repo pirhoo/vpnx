@@ -5,14 +5,13 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-
-
 from unittest.mock import Mock, patch
 
-from vpnx.domain.value_objects import VPNType
+from vpnx.domain.value_objects import VPNType, TunMTU
 from vpnx.infrastructure.log_reader import LogReader
 from vpnx.infrastructure.password_store import GPGPasswordStore
 from vpnx.infrastructure.process import CommandResult, CommandRunner
+from vpnx.infrastructure.vpn_process import OpenVPNProcessManager
 from vpnx.infrastructure.vpn_repository import FileVPNRepository
 
 
@@ -113,6 +112,40 @@ class TestFileVPNRepository(unittest.TestCase):
         path = self.repo.config_path(VPNType("EXT"))
         self.assertEqual(path.name, "client-EXT.ovpn")
 
+
+class TestOpenVPNProcessManager(unittest.TestCase):
+    """Tests for OpenVPNProcessManager."""
+
+    def setUp(self):
+        self.runner = Mock()
+        self.config_path = Path("/etc/vpn/client-EXT.ovpn")
+        self.manager = OpenVPNProcessManager(
+            self.runner,
+            config_paths={"EXT": self.config_path},
+        )
+        self.vpn_type = VPNType("EXT")
+
+    def test_build_command_without_tun_mtu(self):
+        cmd = self.manager._build_command(
+            self.vpn_type, Path("/tmp/auth"), use_up_script=False
+        )
+        # Should NOT use --tun-mtu if not provided (falls back to OpenVPN default)
+        self.assertNotIn("--tun-mtu", cmd)
+
+    def test_build_command_with_tun_mtu_valid(self):
+        cmd = self.manager._build_command(
+            self.vpn_type, Path("/tmp/auth"), use_up_script=False, tun_mtu=TunMTU(1400)
+        )
+        self.assertIn("--tun-mtu", cmd)
+        self.assertIn("1400", cmd)
+
+    def test_build_command_with_tun_mtu_too_low(self):
+        with self.assertRaisesRegex(ValueError, f"tun_mtu must be between {TunMTU.MIN} and {TunMTU.MAX}"):
+            TunMTU(TunMTU.MIN - 1)
+
+    def test_build_command_with_tun_mtu_too_high(self):
+        with self.assertRaisesRegex(ValueError, f"tun_mtu must be between {TunMTU.MIN} and {TunMTU.MAX}"):
+            TunMTU(TunMTU.MAX + 1)
 
 class TestLogReader(unittest.TestCase):
     """Tests for LogReader."""
