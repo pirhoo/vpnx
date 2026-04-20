@@ -1,4 +1,4 @@
-.PHONY: help test lint format clean install setup list all connect coverage bump-patch bump-minor bump-major
+.PHONY: help test lint format clean install setup list all connect coverage bump-patch bump-minor bump-major _check-bump _bump-success
 
 PYTHON := python3
 SRC := vpnx
@@ -83,11 +83,37 @@ else
 	@$(PYTHON) -m vpnx connect $(VPN)
 endif
 
-bump-patch:
+_check-bump:
+	@command -v bump-my-version >/dev/null 2>&1 || { \
+		echo "Error: bump-my-version is not installed"; \
+		echo ""; \
+		echo "Install it with one of:"; \
+		echo "  pipx install bump-my-version"; \
+		echo "  pip install --user bump-my-version"; \
+		echo "  uv tool install bump-my-version"; \
+		exit 1; \
+	}
+
+_bump-success:
+	@NEW_TAG=$$(git describe --tags --abbrev=0); \
+	echo ""; \
+	echo "✓ Version bumped to $$NEW_TAG"; \
+	echo ""; \
+	echo "Next steps:"; \
+	echo "  1. Push the commit and tag:"; \
+	echo "       git push --follow-tags"; \
+	echo "  2. Create a GitHub release for $$NEW_TAG:"; \
+	echo "       gh release create $$NEW_TAG --generate-notes"; \
+	echo "     or open: https://github.com/pirhoo/vpnx/releases/new?tag=$$NEW_TAG"
+
+bump-patch: _check-bump
 	@bump-my-version bump patch
+	@$(MAKE) --no-print-directory _bump-success
 
-bump-minor:
+bump-minor: _check-bump
 	@bump-my-version bump minor
+	@$(MAKE) --no-print-directory _bump-success
 
-bump-major:
+bump-major: _check-bump
 	@bump-my-version bump major
+	@$(MAKE) --no-print-directory _bump-success
