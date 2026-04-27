@@ -81,6 +81,11 @@ vpnx connect <vpn-name>
 
 # List configured VPNs
 vpnx list
+
+# Manually run a VPN's configured down script (e.g. to reset DNS / routes
+# left behind by a stale tunnel). Does not stop OpenVPN.
+vpnx down <vpn-name>
+vpnx down <vpn-name> --dev utun3   # override the tunnel interface (default: utun0)
 ```
 
 ## Configuration
@@ -145,6 +150,7 @@ make test           # Run tests
 make lint           # Check code style
 make format         # Auto-format code
 make clean          # Remove cache files
+make build          # Build sdist and wheel into dist/
 ```
 
 ## Project Structure
