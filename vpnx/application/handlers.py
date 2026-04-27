@@ -542,9 +542,7 @@ class DownHandler(CommandHandler):
         self.display.print(f"Running down script: {script} {dev}")
         result = self.runner.run_script(script, [dev], env={"dev": dev})
         if not result.success:
-            self.display.error(
-                f"Down script exited with code {result.returncode}"
-            )
+            self.display.error(f"Down script exited with code {result.returncode}")
             return False
         self.display.print("Down script completed.")
         return True
