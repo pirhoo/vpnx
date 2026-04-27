@@ -1,8 +1,10 @@
 """Process execution utilities."""
 
+import os
 import subprocess
 from dataclasses import dataclass
-from typing import List, Optional
+from pathlib import Path
+from typing import Dict, List, Optional
 
 
 @dataclass
@@ -69,3 +71,26 @@ class CommandRunner:
                 stderr=subprocess.STDOUT,
                 stdin=stdin or subprocess.DEVNULL,
             )
+
+    def run_script(
+        self,
+        script: Path,
+        args: Optional[List[str]] = None,
+        env: Optional[Dict[str, str]] = None,
+    ) -> CommandResult:
+        """Run a script with stdout/stderr/stdin attached to the terminal.
+
+        Used for scripts that may prompt for sudo or print progress the user
+        should see (e.g. up/down scripts).
+        """
+        cmd = [str(script), *(args or [])]
+        full_env = dict(os.environ)
+        if env:
+            full_env.update(env)
+        try:
+            result = subprocess.run(cmd, env=full_env, check=False)
+            return CommandResult(result.returncode, "", "")
+        except FileNotFoundError:
+            return CommandResult(127, "", f"Script not found: {script}")
+        except PermissionError as e:
+            return CommandResult(126, "", f"Cannot execute {script}: {e}")
