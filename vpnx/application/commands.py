@@ -2,7 +2,7 @@
 
 from abc import ABC
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 from vpnx.domain.value_objects import VPNType
 
@@ -39,3 +39,11 @@ class ConnectAllCommand(Command):
     """Connect to all configured VPNs in sequence."""
 
     vpn_types: List[VPNType]
+
+
+@dataclass
+class DownCommand(Command):
+    """Manually run the configured down script for a VPN."""
+
+    vpn_type: VPNType
+    dev: Optional[str] = None

@@ -4,6 +4,7 @@ from vpnx.application.commands import (
     Command,
     ConnectAllCommand,
     ConnectCommand,
+    DownCommand,
     ListCommand,
     SetupCommand,
 )
@@ -15,5 +16,6 @@ __all__ = [
     "ListCommand",
     "ConnectCommand",
     "ConnectAllCommand",
+    "DownCommand",
     "CommandHandler",
 ]

@@ -14,6 +14,7 @@ from vpnx.application.commands import (
     Command,
     ConnectAllCommand,
     ConnectCommand,
+    DownCommand,
     ListCommand,
     SetupCommand,
 )
@@ -495,6 +496,57 @@ class ListHandler(CommandHandler):
         self.display.print("Available VPNs:")
         for vpn in self.service.list_vpns():
             self.display.print(f"  {vpn}")
+        return True
+
+
+class DownHandler(CommandHandler):
+    """Run the configured down script for a VPN without going through OpenVPN.
+
+    Useful when the tunnel is already gone but DNS / routing state from the
+    previous session is still in place (e.g. stale /etc/resolver entries).
+    """
+
+    DEFAULT_DEV = "utun0"
+
+    def __init__(
+        self,
+        runner: CommandRunner,
+        display: Display,
+        config: AppConfig,
+    ):
+        self.runner = runner
+        self.display = display
+        self.config = config
+
+    def handle(self, command: DownCommand) -> bool:
+        vpn = self.config.get_vpn(command.vpn_type.name)
+        if not vpn:
+            self.display.error(f"Unknown VPN: {command.vpn_type.name}")
+            return False
+
+        script = vpn.down_script or self.config.down_script
+        if not script:
+            self.display.error(
+                f"No down script configured for {vpn.name}. "
+                "Set 'down_script' on the VPN or globally in config.yaml."
+            )
+            return False
+        if not script.exists():
+            self.display.error(f"Down script not found: {script}")
+            return False
+        if not os.access(script, os.X_OK):
+            self.display.error(f"Down script is not executable: {script}")
+            return False
+
+        dev = command.dev or self.DEFAULT_DEV
+        self.display.print(f"Running down script: {script} {dev}")
+        result = self.runner.run_script(script, [dev], env={"dev": dev})
+        if not result.success:
+            self.display.error(
+                f"Down script exited with code {result.returncode}"
+            )
+            return False
+        self.display.print("Down script completed.")
         return True
 
 
