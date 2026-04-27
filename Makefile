@@ -1,4 +1,4 @@
-.PHONY: help test lint format clean install setup list all connect coverage bump-patch bump-minor bump-major _check-bump _bump-success
+.PHONY: help test lint format clean install setup list all connect coverage build bump-patch bump-minor bump-major _check-bump _bump-success
 
 PYTHON := python3
 SRC := vpnx
@@ -21,6 +21,7 @@ help:
 	@echo "  make install        Check system dependencies"
 	@echo ""
 	@echo "Release:"
+	@echo "  make build          Build sdist and wheel into dist/"
 	@echo "  make bump-patch     Bump patch version (0.1.0 -> 0.1.1)"
 	@echo "  make bump-minor     Bump minor version (0.1.0 -> 0.2.0)"
 	@echo "  make bump-major     Bump major version (0.1.0 -> 1.0.0)"
@@ -82,6 +83,22 @@ ifndef VPN
 else
 	@$(PYTHON) -m vpnx connect $(VPN)
 endif
+
+build:
+	@$(PYTHON) -c "import build" >/dev/null 2>&1 || { \
+		echo "Error: the 'build' package is not installed"; \
+		echo ""; \
+		echo "Install it with one of:"; \
+		echo "  pipx install build"; \
+		echo "  pip install --user build"; \
+		echo "  uv tool install build"; \
+		exit 1; \
+	}
+	@rm -rf dist build $(SRC).egg-info
+	@$(PYTHON) -m build
+	@echo ""
+	@echo "Built artifacts:"
+	@ls -1 dist
 
 _check-bump:
 	@command -v bump-my-version >/dev/null 2>&1 || { \
