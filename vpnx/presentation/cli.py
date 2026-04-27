@@ -7,6 +7,7 @@ from vpnx.application.commands import (
     Command,
     ConnectAllCommand,
     ConnectCommand,
+    DownCommand,
     ListCommand,
     SetupCommand,
 )
@@ -38,6 +39,17 @@ class CLI:
         # Connect to all configured VPNs
         sub.add_parser("all", help="Connect to all VPNs in sequence")
 
+        # Manually run the configured down script for a VPN
+        down = sub.add_parser(
+            "down",
+            help="Run the configured down script for a VPN (does not stop OpenVPN)",
+        )
+        down.add_argument("vpn", help="VPN name (e.g., ext, int, prod)")
+        down.add_argument(
+            "--dev",
+            help="Tunnel interface to pass to the script (default: utun0)",
+        )
+
         return parser
 
     def parse(self, args: list = None) -> Optional[Command]:
@@ -61,6 +73,8 @@ class CLI:
             return ConnectAllCommand(vpn_types)
         if parsed.cmd == "connect":
             return ConnectCommand(VPNType(parsed.vpn))
+        if parsed.cmd == "down":
+            return DownCommand(VPNType(parsed.vpn), dev=parsed.dev)
         return None
 
     def _get_all_vpn_types(self) -> List[VPNType]:

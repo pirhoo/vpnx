@@ -8,12 +8,14 @@ from typing import Optional
 from vpnx.application import (
     ConnectAllCommand,
     ConnectCommand,
+    DownCommand,
     ListCommand,
     SetupCommand,
 )
 from vpnx.application.handlers import (
     ConnectAllHandler,
     ConnectHandler,
+    DownHandler,
     SetupHandler,
 )
 from vpnx.domain import VPNService
@@ -166,6 +168,14 @@ class Application:
         # Connection commands need setup
         if not self.check_setup():
             return 1
+
+        # Down command runs the configured down script without touching the
+        # OpenVPN process — prime sudo (the script uses it internally) but
+        # don't try to kill any running tunnel.
+        if isinstance(command, DownCommand):
+            subprocess.run(["sudo", "-v"], check=True)
+            handler = DownHandler(self.runner, self.display, self.config)
+            return 0 if handler.handle(command) else 1
 
         # Validate sudo and check for running VPN
         subprocess.run(["sudo", "-v"], check=True)

@@ -10,6 +10,7 @@ os.environ["NO_COLOR"] = "1"
 from vpnx.application.commands import (
     ConnectAllCommand,
     ConnectCommand,
+    DownCommand,
     ListCommand,
     SetupCommand,
 )
@@ -255,6 +256,17 @@ class TestCLI(unittest.TestCase):
         cmd = self.cli.parse(["connect", "custom"])
         self.assertIsInstance(cmd, ConnectCommand)
         self.assertEqual(cmd.vpn_type.name, "CUSTOM")
+
+    def test_parse_down(self):
+        cmd = self.cli.parse(["down", "ext"])
+        self.assertIsInstance(cmd, DownCommand)
+        self.assertEqual(cmd.vpn_type.name, "EXT")
+        self.assertIsNone(cmd.dev)
+
+    def test_parse_down_with_dev(self):
+        cmd = self.cli.parse(["down", "ext", "--dev", "utun3"])
+        self.assertIsInstance(cmd, DownCommand)
+        self.assertEqual(cmd.dev, "utun3")
 
     def test_parse_no_command(self):
         import io
