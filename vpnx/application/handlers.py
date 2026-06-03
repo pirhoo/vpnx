@@ -575,7 +575,7 @@ class ConnectHandler(CommandHandler):
         display: Display,
         config_dir: Path,
         needs_2fa: bool = True,
-        tun_mtu: Optional[int] = None,
+        tun_mtu: Optional[TunMTU] = None,
     ):
         self.service = service
         self.store = store
@@ -655,6 +655,8 @@ class ConnectHandler(CommandHandler):
             result = self._wait_for_connection()
 
             if result == ConnectionResult.CONNECTED:
+                if self.tun_mtu is not None:
+                    self.service.apply_tun_mtu(self.log_path, self.tun_mtu)
                 self.state.set_status(self.vpn_type, Status.CONNECTED)
                 return True
 
@@ -863,10 +865,12 @@ class ConnectHandler(CommandHandler):
                     self.running = False
                     break
                 elif key == "r":
+                    terminal.restore_input()
                     self._reset_vpn()
                     if not self._connect_vpn():
                         self.success = False
                         break
+                    terminal.set_raw_input()
                 elif key == "UP":
                     # Calculate max offset based on log file size
                     total_lines = log_reader.count_lines(str(self.log_path))
@@ -885,10 +889,12 @@ class ConnectHandler(CommandHandler):
                 if not self.service.is_connected(
                     self.vpn_type
                 ) or self.service.has_errors(self.log_path):
+                    terminal.restore_input()
                     self._reset_vpn()
                     if not self._connect_vpn():
                         self.success = False
                         break
+                    terminal.set_raw_input()
         finally:
             terminal.restore_input()
 
@@ -952,7 +958,7 @@ class ConnectAllHandler(CommandHandler):
         config_paths: Dict[str, Path],
         vpn_types: List[VPNType],
         needs_2fa: Optional[Dict[str, bool]] = None,
-        tun_mtu: Optional[Dict[str, int]] = None,
+        tun_mtu: Optional[Dict[str, TunMTU]] = None,
     ):
         self.service = service
         self.store = store
@@ -1043,6 +1049,8 @@ class ConnectAllHandler(CommandHandler):
             result = self._wait_for_connection(vpn_type, log)
 
             if result == ConnectionResult.CONNECTED:
+                if tun_mtu is not None:
+                    self.service.apply_tun_mtu(log, tun_mtu)
                 self.state.set_status(vpn_type, Status.CONNECTED)
                 return True
 
@@ -1263,12 +1271,14 @@ class ConnectAllHandler(CommandHandler):
                     return
                 elif key == "r":
                     # Reconnect all VPNs
+                    terminal.restore_input()
                     for vpn_type in self.vpn_types:
                         self._reset_vpn(vpn_type)
                     for vpn_type in self.vpn_types:
                         if not self._connect_vpn(vpn_type):
                             self.success = False
                             return
+                    terminal.set_raw_input()
                 elif key == "UP":
                     # Scroll up on active VPN with max offset based on log size
                     active_name = self.vpn_names[self.state.active_vpn_index]
@@ -1308,6 +1318,7 @@ class ConnectAllHandler(CommandHandler):
                     ) or self.service.has_errors(log)
 
                     if is_bad:
+                        terminal.restore_input()
                         # Reset this VPN and all following ones
                         for v in self.vpn_types[i:]:
                             self._reset_vpn(v)
@@ -1316,6 +1327,7 @@ class ConnectAllHandler(CommandHandler):
                             if not self._connect_vpn(v):
                                 self.success = False
                                 return
+                        terminal.set_raw_input()
                         break
         finally:
             terminal.restore_input()

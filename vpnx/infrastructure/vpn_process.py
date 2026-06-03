@@ -1,5 +1,6 @@
 """OpenVPN process management."""
 
+import re
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -128,6 +129,18 @@ class OpenVPNProcessManager(ProcessManager):
         """Clean up log and auth files."""
         self.runner.run_sudo(["rm", "-f", str(log_path)])
         self.runner.run_sudo(["rm", "-f", str(log_path.with_suffix(".auth"))])
+
+    def apply_tun_mtu(self, log_path: Path, tun_mtu: TunMTU) -> bool:
+        """Parse log for tun interface name, then set its MTU via ip link set."""
+        content = self._read_log(log_path)
+        match = re.search(r"TUN/TAP device (\S+) opened", content)
+        if not match:
+            return False
+        interface = match.group(1)
+        result = self.runner.run_sudo(
+            ["ip", "link", "set", "dev", interface, "mtu", str(tun_mtu)]
+        )
+        return result.success
 
     def _read_log(self, log_path: Path) -> str:
         """Read log file content."""

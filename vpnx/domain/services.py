@@ -59,6 +59,10 @@ class ProcessManager(ABC):
     def cleanup(self, log_path: Path) -> None:
         """Clean up log and auth files."""
 
+    @abstractmethod
+    def apply_tun_mtu(self, log_path: Path, tun_mtu: TunMTU) -> bool:
+        """Set MTU on the tun interface created by this VPN process."""
+
 
 class CredentialStore(ABC):
     """Abstract interface for credential storage."""
@@ -166,3 +170,6 @@ class VPNService:
 
     def cleanup(self, log_path: Path) -> None:
         self.process_manager.cleanup(log_path)
+
+    def apply_tun_mtu(self, log_path: Path, tun_mtu: TunMTU) -> bool:
+        return self.process_manager.apply_tun_mtu(log_path, tun_mtu)

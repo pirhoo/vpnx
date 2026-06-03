@@ -147,6 +147,22 @@ class TestOpenVPNProcessManager(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, f"tun_mtu must be between {TunMTU.MIN} and {TunMTU.MAX}"):
             TunMTU(TunMTU.MAX + 1)
 
+    def test_apply_tun_mtu_success(self):
+        log_content = "TUN/TAP device tun0 opened\nInitialization Sequence Completed\n"
+        self.runner.run.return_value = Mock(success=True, stdout=log_content)
+        self.runner.run_sudo.return_value = Mock(success=True)
+        result = self.manager.apply_tun_mtu(Path("/tmp/fake.log"), TunMTU(1410))
+        self.assertTrue(result)
+        self.runner.run_sudo.assert_called_with(
+            ["ip", "link", "set", "dev", "tun0", "mtu", "1410"]
+        )
+
+    def test_apply_tun_mtu_no_interface_in_log(self):
+        log_content = "Initialization Sequence Completed\n"
+        self.runner.run.return_value = Mock(success=True, stdout=log_content)
+        result = self.manager.apply_tun_mtu(Path("/tmp/fake.log"), TunMTU(1410))
+        self.assertFalse(result)
+
 class TestLogReader(unittest.TestCase):
     """Tests for LogReader."""
 
