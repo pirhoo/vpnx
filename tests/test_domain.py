@@ -7,7 +7,7 @@ from unittest.mock import Mock
 
 from vpnx.domain.entities import BandwidthStats, VPNConnection, VPNState
 from vpnx.domain.services import VPNService
-from vpnx.domain.value_objects import ConnectionResult, Credentials, Status, VPNType
+from vpnx.domain.value_objects import ConnectionResult, Credentials, Status, TunMTU, VPNType
 
 
 class TestStatus(unittest.TestCase):
@@ -300,13 +300,12 @@ class TestVPNServiceConnect(unittest.TestCase):
         self.log_path = Path("/tmp/vpn.log")
 
     def test_connect_passes_tun_mtu_to_process_manager(self):
+        tun_mtu = TunMTU(1400)
         self.service.connect(
-            self.vpn_type, self.credentials, self.log_path, tun_mtu=1400
+            self.vpn_type, self.credentials, self.log_path, tun_mtu=tun_mtu
         )
-        _, kwargs = self.process_manager.start.call_args
         args = self.process_manager.start.call_args[0]
-        # tun_mtu is the last positional arg
-        self.assertEqual(args[-1], 1400)
+        self.assertEqual(args[-1], tun_mtu)
 
     def test_connect_passes_none_tun_mtu_by_default(self):
         self.service.connect(self.vpn_type, self.credentials, self.log_path)
