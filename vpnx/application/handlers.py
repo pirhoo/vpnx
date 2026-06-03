@@ -656,7 +656,10 @@ class ConnectHandler(CommandHandler):
 
             if result == ConnectionResult.CONNECTED:
                 if self.tun_mtu is not None:
-                    self.service.apply_tun_mtu(self.log_path, self.tun_mtu)
+                    if not self.service.apply_tun_mtu(self.log_path, self.tun_mtu):
+                        self.display.error(
+                            f"Warning: could not apply tun-mtu {self.tun_mtu}"
+                        )
                 self.state.set_status(self.vpn_type, Status.CONNECTED)
                 return True
 
@@ -1050,7 +1053,10 @@ class ConnectAllHandler(CommandHandler):
 
             if result == ConnectionResult.CONNECTED:
                 if tun_mtu is not None:
-                    self.service.apply_tun_mtu(log, tun_mtu)
+                    if not self.service.apply_tun_mtu(log, tun_mtu):
+                        self.display.error(
+                            f"Warning: could not apply tun-mtu {tun_mtu}"
+                        )
                 self.state.set_status(vpn_type, Status.CONNECTED)
                 return True
 
