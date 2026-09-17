@@ -26,14 +26,29 @@ class GPGPasswordStore(CredentialStore):
             return None
 
         try:
+            # Fail fast when the passphrase is not cached: a hanging pinentry
+            # would get SIGKILLed on timeout and leave gpg-agent locked.
             result = subprocess.run(
-                ["gpg", "--quiet", "--decrypt", str(self.password_file)],
+                [
+                    "gpg",
+                    "--quiet",
+                    "--pinentry-mode",
+                    "error",
+                    "--decrypt",
+                    str(self.password_file),
+                ],
                 capture_output=True,
                 text=True,
                 timeout=30,
             )
             return result.stdout.strip() if result.returncode == 0 else None
-        except (subprocess.TimeoutExpired, FileNotFoundError):
+        except subprocess.TimeoutExpired:
+            try:
+                subprocess.run(["gpgconf", "--kill", "gpg-agent"], timeout=10)
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                pass
+            return None
+        except FileNotFoundError:
             return None
 
     def is_initialized(self) -> bool:

@@ -2,6 +2,7 @@
 """Tests for infrastructure layer."""
 
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -306,6 +307,31 @@ class TestGPGPasswordStore(unittest.TestCase):
         result = self.store.get_password("user")
 
         self.assertIsNone(result)
+
+    @patch("subprocess.run")
+    def test_get_password_uses_pinentry_mode_error(self, mock_run):
+        self.store.password_file.touch()
+        mock_run.return_value = Mock(returncode=0, stdout="secret_password")
+
+        self.store.get_password("user")
+
+        args = mock_run.call_args[0][0]
+        self.assertIn("--pinentry-mode", args)
+        self.assertEqual(args[args.index("--pinentry-mode") + 1], "error")
+
+    @patch("subprocess.run")
+    def test_get_password_kills_agent_on_timeout(self, mock_run):
+        self.store.password_file.touch()
+        mock_run.side_effect = [
+            subprocess.TimeoutExpired(cmd="gpg", timeout=30),
+            Mock(returncode=0),
+        ]
+
+        result = self.store.get_password("user")
+
+        self.assertIsNone(result)
+        kill_args = mock_run.call_args_list[1][0][0]
+        self.assertEqual(kill_args, ["gpgconf", "--kill", "gpg-agent"])
 
     @patch("subprocess.run")
     def test_store_password_calls_gpg_encrypt(self, mock_run):
