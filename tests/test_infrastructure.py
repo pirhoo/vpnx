@@ -309,15 +309,14 @@ class TestGPGPasswordStore(unittest.TestCase):
         self.assertIsNone(result)
 
     @patch("subprocess.run")
-    def test_get_password_uses_pinentry_mode_error(self, mock_run):
+    def test_get_password_lets_pinentry_ask(self, mock_run):
         self.store.password_file.touch()
         mock_run.return_value = Mock(returncode=0, stdout="secret_password")
 
         self.store.get_password("user")
 
         args = mock_run.call_args[0][0]
-        self.assertIn("--pinentry-mode", args)
-        self.assertEqual(args[args.index("--pinentry-mode") + 1], "error")
+        self.assertNotIn("--pinentry-mode", args)
 
     @patch("subprocess.run")
     def test_get_password_kills_agent_on_timeout(self, mock_run):
