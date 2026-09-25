@@ -602,6 +602,7 @@ class ConnectHandler(CommandHandler):
         self.vpn_type = command.vpn_type
         self._setup_signals()
         self._start_sudo_refresh()
+        self._load_stored_password()
         self.tui.setup()
 
         try:
@@ -733,16 +734,19 @@ class ConnectHandler(CommandHandler):
         self.state.prompt = ""
         return password
 
+    def _load_stored_password(self) -> None:
+        """Read the store before the TUI grabs the terminal.
+
+        GPG pinentry cannot draw its passphrase prompt over the alt screen.
+        """
+        if self.store:
+            self.password = self.store.get_password(self.username)
+
     def _ensure_password(self) -> bool:
         """Get password from store or prompt user."""
-        # Try to get from store first
-        if self.store:
-            password = self.store.get_password(self.username)
-            if password:
-                self.password = password
-                return True
+        if self.password:
+            return True
 
-        # Prompt for password
         self.password = self._prompt_password()
         return bool(self.password)
 
@@ -977,6 +981,7 @@ class ConnectAllHandler(CommandHandler):
     def handle(self, command: ConnectAllCommand) -> bool:
         self._setup_signals()
         self._start_sudo_refresh()
+        self._load_stored_password()
         self.tui.setup()
 
         try:
@@ -1123,16 +1128,19 @@ class ConnectAllHandler(CommandHandler):
         self.state.prompt = ""
         return password
 
+    def _load_stored_password(self) -> None:
+        """Read the store before the TUI grabs the terminal.
+
+        GPG pinentry cannot draw its passphrase prompt over the alt screen.
+        """
+        if self.store:
+            self.password = self.store.get_password(self.username)
+
     def _ensure_password(self) -> bool:
         """Get password from store or prompt user."""
-        # Try to get from store first
-        if self.store:
-            password = self.store.get_password(self.username)
-            if password:
-                self.password = password
-                return True
+        if self.password:
+            return True
 
-        # Prompt for password
         self.password = self._prompt_password()
         return bool(self.password)
 

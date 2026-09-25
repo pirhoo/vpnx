@@ -5,7 +5,7 @@ import stat
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 
 from vpnx.application.commands import (
@@ -15,7 +15,12 @@ from vpnx.application.commands import (
     ListCommand,
     SetupCommand,
 )
-from vpnx.application.handlers import DownHandler, ListHandler
+from vpnx.application.handlers import (
+    ConnectAllHandler,
+    ConnectHandler,
+    DownHandler,
+    ListHandler,
+)
 from vpnx.domain.value_objects import VPNType
 from vpnx.infrastructure.app_config import AppConfig, VPNConfig
 from vpnx.infrastructure.process import CommandResult
@@ -169,6 +174,70 @@ class TestDownHandler(unittest.TestCase):
         self.runner.run_script.return_value = CommandResult(1, "", "boom")
         result = self.handler.handle(DownCommand(VPNType("EXT")))
         self.assertFalse(result)
+
+
+class TestPasswordLoadedBeforeTUI(unittest.TestCase):
+    """The store must be read before the TUI takes over the terminal.
+
+    GPG pinentry cannot draw its prompt once the alternate screen is up.
+    """
+
+    def _recorder(self, handler):
+        recorder = Mock()
+        recorder.attach_mock(handler.store, "store")
+        recorder.attach_mock(handler.tui, "tui")
+        return recorder
+
+    def _order(self, recorder):
+        return [name for name, _, _ in recorder.mock_calls]
+
+    def test_connect_handler_reads_store_before_tui_setup(self):
+        service = Mock()
+        service.validate_vpn.return_value = True
+        store = Mock()
+        store.get_password.return_value = "stored"
+        handler = ConnectHandler(
+            service, store, "user", Mock(), Mock(), Path("/tmp/configs")
+        )
+        recorder = self._recorder(handler)
+
+        with patch.object(handler, "_setup_signals"), patch.object(
+            handler, "_start_sudo_refresh"
+        ), patch.object(handler, "_connect_vpn", return_value=False):
+            handler.handle(ConnectCommand(VPNType("PROD")))
+
+        order = self._order(recorder)
+        self.assertLess(order.index("store.get_password"), order.index("tui.setup"))
+
+    def test_connect_all_handler_reads_store_before_tui_setup(self):
+        store = Mock()
+        store.get_password.return_value = "stored"
+        handler = ConnectAllHandler(
+            Mock(), store, "user", Mock(), Mock(), {}, [VPNType("PROD")]
+        )
+        recorder = self._recorder(handler)
+
+        with patch.object(handler, "_setup_signals"), patch.object(
+            handler, "_start_sudo_refresh"
+        ), patch.object(handler, "_connect_vpn", return_value=False):
+            handler.handle(ConnectAllCommand([VPNType("PROD")]))
+
+        order = self._order(recorder)
+        self.assertLess(order.index("store.get_password"), order.index("tui.setup"))
+
+    def test_stored_password_skips_the_prompt(self):
+        store = Mock()
+        store.get_password.return_value = "stored"
+        handler = ConnectHandler(
+            Mock(), store, "user", Mock(), Mock(), Path("/tmp/configs")
+        )
+        handler.password = "stored"
+
+        with patch.object(handler, "_prompt_password") as prompt:
+            self.assertTrue(handler._ensure_password())
+
+        prompt.assert_not_called()
+        store.get_password.assert_not_called()
 
 
 if __name__ == "__main__":
